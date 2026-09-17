@@ -1,0 +1,23 @@
+--- /login/weixinapp/?next=%2Fweb
+    status=200 bytes=1043 ctype=text/html; charset=gbk
+    final=https://open.weixin.qq.com/connect/oauth2/authorize?appid=wxeb48f69796c0d694&redirect_uri=https%3A%2F%2Fchangjiang.yuketang.cn%2Fcomplete%2Fweixinapp%2F&response_type=code&scope=snsapi_userinfo&state=jnuOGgYVmob8I3gQeIhjm1MRjokmFwnE&connect_redirect=1
+    script srcs (0): (none)
+    head: <!DOCTYPE html> <html> <head> <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0"> </head> <body> <script type="text/javascript"> var ua = navigator.userAgent.toLowerCase(); var isWeixin = ua.indexOf('micromessenger') != -1; va
+
+--- /web?ykt_ai_login
+    status=200 bytes=4493 ctype=text/html; charset=utf-8
+    final=https://changjiang.yuketang.cn/web?ykt_ai_login
+    script srcs (4): /static/vue/login.js?_dt= | https://fe-static-yuketang.yuketang.cn/fe/static/vue/2.2.680/login.js | https://fe-static-yuketang.yuketang.cn/fe/static/js/libs/raven.min.js | https://web-stat.jiguang.cn/web-janalytics/scripts/janalytics-web.min.js
+    head: <!DOCTYPE html> <html> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, minimal-ui"> <meta name="format-detection" content="telephone=no" /> <meta name=”render
+
+--- /api/open/is_login/
+    status=200 bytes=51 ctype=application/json; charset=utf-8
+    final=https://changjiang.yuketang.cn/api/open/is_login/
+    script srcs (0): (none)
+    head: {"msg":"","data":{"is_login":false},"success":true}
+
+--- /v2/api/web/userinfo
+    status=401 bytes=53 ctype=application/json; charset=utf-8
+    final=https://changjiang.yuketang.cn/v2/api/web/userinfo
+    script srcs (0): (none)
+    head: {"errcode":401002,"errmsg":"Cookie has no sessionid"}

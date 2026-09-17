@@ -1,0 +1,32 @@
+<Project>
+    <!-- https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management -->
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- Avalonia packages -->
+        <!-- Important: keep version in sync! -->
+        <!--
+          例外说明：Avalonia.Controls.WebView 目前只有 12.1.0 离线可得
+          （本地 packages/ 源里只有这个版本；它只要求 Avalonia >= 12.0.0，
+          与下方 12.0.3 组合可以正常 restore）。
+          两个方向的同步都已验证过但离线环境做不到：
+            - 全系升 12.1.0：Avalonia 12.1.0 核心包不在离线源/缓存（NU1101）；
+            - WebView 降 12.0.3：该版本不存在，NuGet 按「最低版本」语义会解到 12.1.0。
+          恢复联网后应把全系统一升到 12.1.0。
+        -->
+        <PackageVersion Include="Avalonia" Version="12.0.3" />
+        <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.3" />
+        <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+        <PackageVersion Include="Avalonia.Desktop" Version="12.0.3" />
+        <PackageVersion Include="Avalonia.iOS" Version="12.0.3" />
+        <PackageVersion Include="Avalonia.Browser" Version="12.0.3" />
+        <PackageVersion Include="Avalonia.Android" Version="12.0.3" />
+        <!-- First-party WebView control (desktop heads), used for 雨课堂 QR login. -->
+        <PackageVersion Include="Avalonia.Controls.WebView" Version="12.1.0" />
+
+        <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+
+        <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+    </ItemGroup>
+</Project>

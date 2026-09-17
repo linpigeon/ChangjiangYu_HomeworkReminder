@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="HomeworkReminder.Android/HomeworkReminder.Android.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="HomeworkReminder.Browser/HomeworkReminder.Browser.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="HomeworkReminder.Desktop/HomeworkReminder.Desktop.csproj" />
+  <Project Path="HomeworkReminder.iOS/HomeworkReminder.iOS.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="HomeworkReminder/HomeworkReminder.csproj" />
+  <Project Path="tools/SyncSmoke/SyncSmoke.csproj" />
+</Solution>

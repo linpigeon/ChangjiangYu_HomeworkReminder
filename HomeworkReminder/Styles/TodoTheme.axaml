@@ -1,0 +1,277 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    仿 Microsoft To Do 的控件样式。
+    关键取舍：
+      - 复选框做成 To Do 的圆形外观（默认 Avalonia 是圆角方块）；
+      - 列表行用 Border 承载，选中态与悬停态由 Classes 切换；
+      - 「已完成」用灰色圆形对勾 + 文字灰化，不用删除线（To Do 桌面版也不画删除线）。
+    注意：ControlTheme 必须放在 Styles.Resources 里，直接作为 Styles 的子元素会被
+    当成样式集合的内容而解析失败。
+  -->
+  <Styles.Resources>
+    <ControlTheme x:Key="TodoCircleCheckBox" TargetType="CheckBox">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="2" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="Root" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+            <Grid Width="20" Height="20">
+              <Ellipse Name="Ring" Width="20" Height="20"
+                       Stroke="#8A8886" StrokeThickness="1.4" Fill="Transparent" />
+              <Ellipse Name="Disc" Width="20" Height="20"
+                       Fill="{DynamicResource TodoAccent}" IsVisible="False" />
+              <Path Name="Tick" Data="M 6,9.7 L 9.6,13.2 L 16,5.7"
+                    Stroke="White" StrokeThickness="1.8"
+                    StrokeLineCap="Round" StrokeJoin="Round"
+                    IsVisible="False"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+  </Styles.Resources>
+
+  <!-- ============ 圆形勾选框 ============
+       两种用法：
+         .todocircle —— 只有圆环与对勾，用于待办行（紧邻标题，不需要重复文本）
+         .todo       —— 圆环 + 文本，用于「隐藏已勾选」这类带标签的开关
+       分开定义是因为一旦自定义 Template，就必须自己保留 ContentPresenter，
+       否则带文本的复选框会只显示圆环。 -->
+  <Style Selector="CheckBox.todocircle">
+    <Setter Property="Theme" Value="{DynamicResource TodoCircleCheckBox}" />
+  </Style>
+
+  <Style Selector="CheckBox.todocircle /template/ Ellipse#Ring">
+    <Setter Property="Stroke" Value="#8A8886" />
+  </Style>
+  <Style Selector="CheckBox.todocircle:pointerover /template/ Ellipse#Ring">
+    <Setter Property="Stroke" Value="{DynamicResource TodoAccent}" />
+  </Style>
+  <Style Selector="CheckBox.todocircle:checked /template/ Ellipse#Ring">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="CheckBox.todocircle:checked /template/ Ellipse#Disc">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="CheckBox.todocircle:checked /template/ Path#Tick">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="CheckBox.todocircle:checked:pointerover /template/ Ellipse#Disc">
+    <Setter Property="Fill" Value="{DynamicResource TodoAccentHover}" />
+  </Style>
+
+  <!-- 带标签的开关：圆环 + 文本，未勾选也显示文本 -->
+  <Style Selector="CheckBox.todo">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="8" Background="Transparent">
+          <Grid Width="18" Height="18" VerticalAlignment="Center">
+            <Ellipse Name="Ring" Width="18" Height="18"
+                     Stroke="#8A8886" StrokeThickness="1.4" Fill="Transparent" />
+            <Ellipse Name="Disc" Width="18" Height="18"
+                     Fill="{DynamicResource TodoAccent}" IsVisible="False" />
+            <Path Name="Tick" Data="M 5.4,8.8 L 8.7,11.9 L 14.4,5.1"
+                  Stroke="White" StrokeThickness="1.7"
+                  StrokeLineCap="Round" StrokeJoin="Round"
+                  IsVisible="False"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Grid>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalAlignment="Center" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="CheckBox.todo:pointerover /template/ Ellipse#Ring">
+    <Setter Property="Stroke" Value="{DynamicResource TodoAccent}" />
+  </Style>
+  <Style Selector="CheckBox.todo:checked /template/ Ellipse#Ring">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="CheckBox.todo:checked /template/ Ellipse#Disc">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="CheckBox.todo:checked /template/ Path#Tick">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+
+  <!-- ============ 侧边栏导航项 ============ -->
+  <Style Selector="Border.navrow">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Border.navrow:pointerover">
+    <Setter Property="Background" Value="{DynamicResource TodoNavHover}" />
+  </Style>
+
+  <Style Selector="Border.navrow.selected">
+    <Setter Property="Background" Value="{DynamicResource TodoSelected}" />
+  </Style>
+
+  <Style Selector="Border.navrow.selected TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- ============ 普通工具按钮 ============ -->
+  <Style Selector="Button.tool">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#14000000" />
+  </Style>
+
+  <!-- 主行动按钮 -->
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource TodoAccent}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="16,9" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoAccentHover}" />
+  </Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoDisabled}" />
+  </Style>
+
+  <!-- 次要按钮（描边） -->
+  <Style Selector="Button.outline">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TodoBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.outline:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoHover}" />
+  </Style>
+
+  <!-- ============ 待办行 ============ -->
+  <Style Selector="Border.row">
+    <Setter Property="Background" Value="{DynamicResource TodoSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TodoBorder}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="12,10" />
+  </Style>
+
+  <Style Selector="Border.row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource TodoRowHover}" />
+  </Style>
+
+  <Style Selector="Border.row.selected">
+    <Setter Property="Background" Value="{DynamicResource TodoSelected}" />
+  </Style>
+
+  <!-- 雨课堂已判定完成的作业：整行灰化 -->
+  <Style Selector="Border.row.serverdone">
+    <Setter Property="Opacity" Value="0.62" />
+  </Style>
+
+  <!-- 本地已勾选（但雨课堂未完成） -->
+  <Style Selector="Border.row.localdone TextBlock.title">
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextTertiary}" />
+  </Style>
+
+  <!-- ============ 文本层级 ============ -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextPrimary}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style Selector="TextBlock.meta">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextSecondary}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style Selector="TextBlock.faint">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextTertiary}" />
+  </Style>
+
+  <Style Selector="TextBlock.overdue">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoOverdue}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="TextBlock.sectionHeader">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextPrimary}" />
+  </Style>
+
+  <Style Selector="TextBlock.paneTitle">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextPrimary}" />
+  </Style>
+
+  <!-- 图标字形 -->
+  <Style Selector="TextBlock.icon">
+    <Setter Property="FontFamily" Value="{DynamicResource TodoIconFont}" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextSecondary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.icon.large">
+    <Setter Property="FontSize" Value="20" />
+  </Style>
+
+  <!-- 进度徽标 -->
+  <Style Selector="Border.badge">
+    <Setter Property="Background" Value="{DynamicResource TodoBadgeBackground}" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="7,2" />
+  </Style>
+
+  <Style Selector="Border.badge.progress">
+    <Setter Property="Background" Value="{DynamicResource TodoAccentSoft}" />
+  </Style>
+
+   <Style Selector="Border.badge.warn">
+    <Setter Property="Background" Value="{DynamicResource TodoErrorBackground}" />
+  </Style>
+
+  <Style Selector="Border.badge TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextSecondary}" />
+  </Style>
+
+  <Style Selector="Border.badge.progress TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TodoAccent}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Border.badge.warn TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TodoOverdue}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- ============ 滚动条收细，贴近 To Do ============ -->
+  <Style Selector="ScrollBar:vertical">
+    <Setter Property="Width" Value="8" />
+  </Style>
+
+</Styles>

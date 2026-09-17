@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HomeworkReminder.ViewModels"
+        xmlns:views="using:HomeworkReminder.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
+        x:Class="HomeworkReminder.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/app.ico"
+        Width="1180" Height="760"
+        MinWidth="960" MinHeight="580"
+        WindowStartupLocation="CenterScreen"
+        Title="作业提醒 · 长江雨课堂"
+        TransparencyLevelHint="AcrylicBlur"
+        TransparencyBackgroundFallback="#FAF9F8"
+        Background="Transparent">
+
+  <!--
+    层次：壁纸（可选）→ 白色遮罩（不透明度 = 1 − 滑块百分比）→ 界面内容。
+    没有壁纸时，窗口的 AcrylicBlur 让桌面磨砂透过半透明面板与遮罩；
+    不支持透明混合的平台回落到 TransparencyBackgroundFallback。
+  -->
+  <Grid>
+    <Image Source="{Binding WallpaperImage}" Stretch="UniformToFill"
+           IsVisible="{Binding HasWallpaper}" />
+    <Border Background="{Binding VeilBrush}" Opacity="{Binding VeilOpacity}" />
+
+    <Panel>
+      <!-- 主界面 -->
+      <views:TodoShellView IsVisible="{Binding ShowContent}" />
+
+      <!-- 登录 / 出错 -->
+      <views:LoginView IsVisible="{Binding ShowLogin}" />
+    </Panel>
+  </Grid>
+</Window>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!--If you are willing to use platform-specific APIs, use conditional compilation.
+    See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- exe 图标（资源管理器/任务栏显示）；窗口与托盘图标用同一份 ico -->
+    <ApplicationIcon>..\HomeworkReminder\Assets\app.ico</ApplicationIcon>
+    <!-- 裁剪发布（PublishTrimmed）下反射式 JSON 不可靠：实测 trim 版登录后同步
+         即崩（YktCourse 的反射元数据被裁）。业务序列化已全部改走源生成的
+         AppJsonContext；此开关仅作为漏网路径的兜底保留，正常流程不再依赖反射。 -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Controls.WebView" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HomeworkReminder\HomeworkReminder.csproj" />
+  </ItemGroup>
+</Project>

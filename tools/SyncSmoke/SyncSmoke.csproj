@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    无界面同步冒烟测试。存在的理由：验证数据层（会话 → 课程 → 学习日志 →
+    完成进度 → 待办）可以独立于 Avalonia UI 运行，这样在受限环境里也能确认
+    「API 客户端 + 同步服务」这一层是真的可用，而不是只能靠界面观察。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HomeworkReminder.SyncSmoke</RootNamespace>
+    <AssemblyName>HomeworkReminder.SyncSmoke</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\HomeworkReminder\HomeworkReminder.csproj" />
+  </ItemGroup>
+</Project>

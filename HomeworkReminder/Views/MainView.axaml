@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:views="using:HomeworkReminder.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
+             x:Class="HomeworkReminder.Views.MainView"
+             x:DataType="vm:MainViewModel">
+  <!--
+    Browser / 单视图平台的根视图。桌面端用的是 MainWindow，
+    这里保持同样的内容结构，让 ViewLocator 在两个宿主下都能工作。
+  -->
+  <Panel>
+    <views:TodoShellView IsVisible="{Binding ShowContent}" />
+    <views:LoginView IsVisible="{Binding ShowLogin}" />
+  </Panel>
+</UserControl>

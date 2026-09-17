@@ -1,0 +1,124 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:controls="using:Avalonia.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="700"
+             x:Class="HomeworkReminder.Views.LoginView"
+             x:DataType="vm:MainViewModel"
+             Background="{Binding SurfaceBrush}">
+
+  <!--
+    微软账户登录窗风格：顶部小字品牌、中间只有二维码、下方一行状态、
+    底部低调的链接式入口。操作指引由雨课堂页面自身的卡片承担，
+    应用只补充状态与兜底入口。
+  -->
+  <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+    <!-- ==================== 顶部品牌 ==================== -->
+    <StackPanel Grid.Row="0" Margin="36,22,36,0">
+      <TextBlock Text="作业提醒" FontSize="20" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TodoTextPrimary}" />
+      <TextBlock Text="长江雨课堂" FontSize="12" Margin="0,3,0,0"
+                 Foreground="{DynamicResource TodoTextTertiary}" />
+    </StackPanel>
+
+    <!-- ==================== 中间：二维码 / 兜底输入 ==================== -->
+    <Panel Grid.Row="1" Margin="16,10,16,0">
+
+      <!--
+        扫码登录。WebView2 的适配器在控件进入可视树时异步创建；宿主环境缺 WebView2
+        运行时（或沙箱禁止子进程）时创建会失败，异常以「未观察的任务异常」形式冒到
+        调度器——Desktop 的 Program.cs 已挂 TaskScheduler.UnobservedTaskException 并
+        SetObserved，进程不会被终止，界面停留在占位，用户可改用「粘贴 Cookie」。
+        注意：IsVisible=False 只是初始状态，登录页一显示 ShowWebView() 就会把它挂上
+        （自动检测已有登录态），并非「真正扫码时才创建」；占位用于覆盖适配器创建前
+        与创建失败这两种情况。
+        页面内的二维码卡片由 LoginView 注入的 CSS 钉在视口中央、并隐藏滚动条，
+        因此这里让 WebView 直接填满中间区域即可，无需裁剪容器。
+      -->
+      <Panel Name="WebViewHost" IsVisible="False">
+        <controls:NativeWebView Name="LoginWebView" />
+      </Panel>
+
+      <!-- WebView 尚未挂载时的占位，避免中间一片空白 -->
+      <StackPanel Name="WebViewPlaceholder" VerticalAlignment="Center" Spacing="10"
+                  HorizontalAlignment="Center" IsVisible="True">
+        <TextBlock Classes="icon" Text="&#xE8D7;" FontSize="34"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TodoTextTertiary}" />
+        <TextBlock Text="正在准备登录页…" FontSize="13" HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TodoTextTertiary}" />
+      </StackPanel>
+    </Panel>
+
+    <!-- Cookie 兜底：替换中间的二维码区域 -->
+    <ScrollViewer Grid.Row="1" Margin="36,6,36,0" IsVisible="{Binding ShowCookieInput}">
+      <StackPanel Spacing="12">
+        <TextBlock Text="粘贴 Cookie 登录" FontSize="16" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TodoTextPrimary}" />
+        <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="19"
+                   Foreground="{DynamicResource TodoTextSecondary}"
+                   Text="扫码登录页无法显示时（例如缺少 WebView2 运行时）可改用此方式：在浏览器登录长江雨课堂，按 F12 打开开发者工具，切到 Network，点开任意一个 v2/api/web 请求，把 Request Headers 里整条 cookie 粘贴到下面。"/>
+        <TextBox Name="CookieBox" AcceptsReturn="True" TextWrapping="Wrap"
+                 PlaceholderText="sessionid=...; csrftoken=..."
+                 MinHeight="110" FontSize="12" />
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button Classes="primary" Content="使用这个 Cookie 登录"
+                  Click="OnUseCookieClick" />
+          <Button Classes="outline" Content="返回扫码登录"
+                  Click="OnBackToScanClick" />
+        </StackPanel>
+        <TextBlock TextWrapping="Wrap" FontSize="11"
+                   Foreground="{DynamicResource TodoTextTertiary}"
+                   Text="cookie 里的 sessionid 就是登录凭证，用完可在雨课堂里退出登录使其失效。"/>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- ==================== 状态与错误 ==================== -->
+    <StackPanel Grid.Row="2" Margin="36,10,36,0" Spacing="8">
+
+      <!-- 错误提示条 -->
+      <Border IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              Background="{DynamicResource TodoErrorBackground}"
+              BorderBrush="{DynamicResource TodoErrorBorder}" BorderThickness="1"
+              CornerRadius="4" Padding="12,8">
+        <TextBlock Text="{Binding ErrorMessage}" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TodoOverdue}" />
+      </Border>
+
+      <!-- 一行状态：二维码下方 -->
+      <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+        <TextBlock Classes="icon" Text="&#xE72E;" FontSize="13"
+                   Foreground="{DynamicResource TodoTextTertiary}"
+                   IsVisible="{Binding IsBusy}" />
+        <TextBlock Text="{Binding LoginStatusText}" FontSize="12"
+                   Foreground="{DynamicResource TodoTextSecondary}"
+                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="380" />
+      </StackPanel>
+    </StackPanel>
+
+    <!-- ==================== 底部链接 ==================== -->
+    <Grid Grid.Row="3" Margin="32,4,32,12" ColumnDefinitions="*,Auto">
+      <Button Grid.Column="0" Classes="tool" HorizontalAlignment="Left"
+              Click="OnToggleCookieInputClick"
+              IsVisible="{Binding !ShowCookieInput}">
+        <TextBlock Text="使用 Cookie 登录" FontSize="12"
+                   Foreground="{DynamicResource TodoAccent}" />
+      </Button>
+      <!--
+        可点条件只跟随「用户主动检测」，不跟随 IsBusy：
+        后台自动检测也会长时间占用 IsBusy，若绑它按钮会在自动检测期间被禁用，
+        用户点上去毫无反应（表现为「按钮点不动」）。
+      -->
+      <Button Grid.Column="1" Classes="tool" Name="LoginButton"
+              Click="OnStartLoginClick"
+              IsEnabled="{Binding !IsCheckingLogin}"
+              ToolTip.Tip="{Binding LoginButtonText}">
+        <TextBlock Classes="icon" Text="&#xE72C;" FontSize="14"
+                   Foreground="{DynamicResource TodoTextSecondary}" />
+      </Button>
+    </Grid>
+  </Grid>
+</UserControl>

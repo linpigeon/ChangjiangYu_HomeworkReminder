@@ -1,0 +1,111 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:HomeworkReminder"
+             x:Class="HomeworkReminder.App">
+
+    <Application.DataTemplates>
+        <local:ViewLocator/>
+    </Application.DataTemplates>
+
+    <!--
+      Microsoft To Do 的视觉语言：工作区底色、卡片、单一强调色、细边框、小圆角。
+      浅色/深色两套色板放在 ThemeDictionaries 里，视图与样式一律用 DynamicResource
+      引用，切换主题时实时生效。大面积面板色带 alpha：配合窗口 AcrylicBlur 与
+      可选壁纸透出背景；真正随透明度滑块联动的面板画刷由 MainViewModel 计算，
+      这里的 TodoSidebarBackground/TodoListBackground/TodoSurface 只是兜底
+      （设计器、待办行卡片等）。
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="TodoAccentColor">#2564CF</Color>
+                    <SolidColorBrush x:Key="TodoAccent" Color="#2564CF" />
+                    <SolidColorBrush x:Key="TodoAccentHover" Color="#1B4EA8" />
+                    <SolidColorBrush x:Key="TodoAccentSoft" Color="#E8F0FD" />
+                    <SolidColorBrush x:Key="TodoAccentSoftHover" Color="#D6E4FB" />
+
+                    <SolidColorBrush x:Key="TodoSidebarBackground" Color="#D8F3F2F1" />
+                    <SolidColorBrush x:Key="TodoListBackground" Color="#D8FAF9F8" />
+                    <SolidColorBrush x:Key="TodoSurface" Color="#E6FFFFFF" />
+                    <SolidColorBrush x:Key="TodoHover" Color="#F0EFEE" />
+                    <SolidColorBrush x:Key="TodoRowHover" Color="#C8F5F5F5" />
+                    <SolidColorBrush x:Key="TodoSelected" Color="#D8E8F0FD" />
+
+                    <SolidColorBrush x:Key="TodoTextPrimary" Color="#1B1B1B" />
+                    <SolidColorBrush x:Key="TodoTextSecondary" Color="#5C5C5C" />
+                    <SolidColorBrush x:Key="TodoTextTertiary" Color="#8A8886" />
+
+                    <SolidColorBrush x:Key="TodoBorder" Color="#E5E3E1" />
+                    <SolidColorBrush x:Key="TodoOverdue" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="TodoWarningBackground" Color="#FFF7E0" />
+                    <SolidColorBrush x:Key="TodoWarningBorder" Color="#E8C55B" />
+                    <SolidColorBrush x:Key="TodoErrorBackground" Color="#FDE7E9" />
+                    <SolidColorBrush x:Key="TodoErrorBorder" Color="#E8A0A6" />
+                    <SolidColorBrush x:Key="TodoNavHover" Color="#E8E6E4" />
+                    <SolidColorBrush x:Key="TodoBadgeBackground" Color="#EFEFEF" />
+                    <SolidColorBrush x:Key="TodoDisabled" Color="#C7C7C7" />
+                    <SolidColorBrush x:Key="TodoDialogBackground" Color="#FFFFFF" />
+                </ResourceDictionary>
+
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="TodoAccentColor">#4C8DFF</Color>
+                    <SolidColorBrush x:Key="TodoAccent" Color="#4C8DFF" />
+                    <SolidColorBrush x:Key="TodoAccentHover" Color="#6FA5FF" />
+                    <SolidColorBrush x:Key="TodoAccentSoft" Color="#1F3A5F" />
+                    <SolidColorBrush x:Key="TodoAccentSoftHover" Color="#2A4A73" />
+
+                    <SolidColorBrush x:Key="TodoSidebarBackground" Color="#D8282828" />
+                    <SolidColorBrush x:Key="TodoListBackground" Color="#D8232323" />
+                    <SolidColorBrush x:Key="TodoSurface" Color="#E62E2E2E" />
+                    <SolidColorBrush x:Key="TodoHover" Color="#383838" />
+                    <SolidColorBrush x:Key="TodoRowHover" Color="#C8323232" />
+                    <SolidColorBrush x:Key="TodoSelected" Color="#D81F3A5F" />
+
+                    <SolidColorBrush x:Key="TodoTextPrimary" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="TodoTextSecondary" Color="#C8C6C4" />
+                    <SolidColorBrush x:Key="TodoTextTertiary" Color="#8A8886" />
+
+                    <SolidColorBrush x:Key="TodoBorder" Color="#3B3A39" />
+                    <SolidColorBrush x:Key="TodoOverdue" Color="#F1707B" />
+                    <SolidColorBrush x:Key="TodoWarningBackground" Color="#433519" />
+                    <SolidColorBrush x:Key="TodoWarningBorder" Color="#9C7C33" />
+                    <SolidColorBrush x:Key="TodoErrorBackground" Color="#442726" />
+                    <SolidColorBrush x:Key="TodoErrorBorder" Color="#7A3B40" />
+                    <SolidColorBrush x:Key="TodoNavHover" Color="#383838" />
+                    <SolidColorBrush x:Key="TodoBadgeBackground" Color="#3D3D3D" />
+                    <SolidColorBrush x:Key="TodoDisabled" Color="#4A4A4A" />
+                    <SolidColorBrush x:Key="TodoDialogBackground" Color="#2B2B2B" />
+                </ResourceDictionary>
+
+            </ResourceDictionary.ThemeDictionaries>
+
+            <FontFamily x:Key="TodoIconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://HomeworkReminder/Styles/TodoTheme.axaml" />
+    </Application.Styles>
+
+    <!--
+      系统托盘图标：窗口「最小化运行」后唯一入口。
+      左键单击或菜单「打开主界面」都会把窗口还原到前台。
+    -->
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon ToolTipText="作业提醒 · 长江雨课堂"
+                      Icon="/Assets/app.ico"
+                      Clicked="OnTrayClicked">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="打开主界面" Click="OnTrayOpenClick" />
+                        <NativeMenuItem Header="退出" Click="OnTrayQuitClick" />
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+</Application>
