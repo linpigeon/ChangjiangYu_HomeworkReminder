@@ -205,6 +205,19 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Bitmap? _wallpaperImage;
 
+    /// <summary>侧边栏是否收起（窄屏自动收起，也可手动切换）。</summary>
+    [ObservableProperty]
+    private bool _sidebarCollapsed;
+
+    /// <summary>侧边栏列宽：收起时归零，把空间让给列表。</summary>
+    public Avalonia.Controls.GridLength SidebarColumnWidth =>
+        SidebarCollapsed ? new Avalonia.Controls.GridLength(0) : new Avalonia.Controls.GridLength(252);
+
+    partial void OnSidebarCollapsedChanged(bool value) => OnPropertyChanged(nameof(SidebarColumnWidth));
+
+    /// <summary>切换侧边栏收起/展开。</summary>
+    public void ToggleSidebar() => SidebarCollapsed = !SidebarCollapsed;
+
     [ObservableProperty]
     private bool _hasWallpaper;
 

@@ -21,6 +21,35 @@ public partial class TodoShellView : UserControl
     public TodoShellView()
     {
         InitializeComponent();
+        SizeChanged += OnSizeChanged;
+    }
+
+    /// <summary>记录「窄屏自动收起」是我们做的，回到宽屏时只还原这种收起（不覆盖用户手动选择）。</summary>
+    private bool _autoCollapsed;
+
+    /// <summary>窄屏（手机竖屏等）自动收起侧边栏，宽屏自动还原。</summary>
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        var narrow = Bounds.Width < 700;
+        if (narrow && !_autoCollapsed && !vm.SidebarCollapsed)
+        {
+            vm.SidebarCollapsed = true;
+            _autoCollapsed = true;
+        }
+        else if (!narrow && _autoCollapsed)
+        {
+            vm.SidebarCollapsed = false;
+            _autoCollapsed = false;
+        }
+    }
+
+    private void OnToggleSidebarClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        // 手动操作后，窄屏自动收起不再插手（直到尺寸再次跨过阈值方向）。
+        _autoCollapsed = false;
+        vm.ToggleSidebar();
     }
 
     private MainViewModel? Vm => DataContext as MainViewModel;

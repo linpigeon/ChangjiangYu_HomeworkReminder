@@ -8,10 +8,15 @@
              x:Class="HomeworkReminder.Views.TodoShellView"
              x:DataType="vm:MainViewModel">
 
-  <Grid ColumnDefinitions="252,400,*">
-
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="{Binding SidebarColumnWidth}" />
+      <ColumnDefinition Width="400" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
     <!-- ==================== 左：侧边栏 ==================== -->
-    <Border Grid.Column="0" Background="{Binding SidebarBrush}">
+    <!-- ClipToBounds：列宽收起为 0 时内容不能溢出绘制 -->
+    <Border Grid.Column="0" Background="{Binding SidebarBrush}" ClipToBounds="True">
       <Grid RowDefinitions="Auto,*,Auto">
 
         <!-- 顶部：用户 + 刷新 -->
@@ -137,12 +142,17 @@
       <Grid RowDefinitions="Auto,Auto,*,Auto">
 
         <!-- 列表头 -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="18,16,14,6">
-          <StackPanel Grid.Column="0" Spacing="2">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="14,16,14,6">
+          <Button Grid.Column="0" Classes="tool" Click="OnToggleSidebarClick"
+                  VerticalAlignment="Top"
+                  ToolTip.Tip="收起/展开侧边栏（窄屏自动收起）">
+            <TextBlock Classes="icon" Text="&#xF0C9;" />
+          </Button>
+          <StackPanel Grid.Column="1" Spacing="2" Margin="10,0,0,0">
             <TextBlock Classes="sectionHeader" Text="{Binding ListTitle}" />
             <TextBlock Classes="faint" Text="{Binding ListSubtitle}" />
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
             <Button Classes="tool" Click="OnMarkAllReadClick"
                     IsVisible="{Binding ShowUnreadBadge}"
                     ToolTip.Tip="把公告全部标记为已读（雨课堂只提供「全部已读」接口）">
