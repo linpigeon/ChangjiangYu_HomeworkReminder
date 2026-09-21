@@ -185,9 +185,12 @@
           IsVisible="{Binding DrawerOpen}"
           PointerPressed="OnDrawerScrimPressed" />
 
-  <!-- 窄屏浮层：覆盖式抽屉（点 ☰ 展开，选导航/点遮罩收起） -->
+  <!-- 窄屏浮层：覆盖式抽屉（点 ☰ 展开，选导航/点遮罩收起）。
+       宿主给不透明底色：侧边栏画刷为壁纸效果带透明度，
+       叠在不透明底上才不会透出底下的列表。 -->
   <Border IsVisible="{Binding DrawerOpen}"
           HorizontalAlignment="Left" Width="300"
+          Background="{DynamicResource TodoDialogBackground}"
           BoxShadow="4 0 24 0 #40000000">
     <views:SidebarView />
   </Border>
