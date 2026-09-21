@@ -103,6 +103,12 @@ public static class JsonSelfTest
                    && profile.AvatarUrl == "https://x/y.png"
                    && profile.Subtitle == "某大学 · 2024001",
                 "用户信息解析不符");
+
+            // v/course_meta/user_info 用蛇形命名（school_number），也要能解析。
+            var snake = JsonSerializer.Deserialize(
+                """{"name":"李四","avatar":null,"school":"某大学","school_number":"2024002"}""",
+                AppJsonContext.Default.YktUserProfile);
+            Assert(snake?.Subtitle == "某大学 · 2024002", "蛇形命名的用户信息解析不符");
         });
 
         Check("POST 请求体", () =>

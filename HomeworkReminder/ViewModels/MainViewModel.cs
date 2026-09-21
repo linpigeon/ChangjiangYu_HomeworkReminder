@@ -111,12 +111,12 @@ public sealed partial class MainViewModel : ViewModelBase
 
         NavItems =
         [
-            new NavItem("myday", "我的一天", "\uE8C8", "今天到期与已过期的事项"),
-            new NavItem("planned", "计划内", "\uE787", "所有有截止时间的事项，按时间排序"),
-            new NavItem("homework", "作业", "\uE7C3", "全部作业及其作答进度"),
-            new NavItem("announcement", "公告", "\uE7E7", "课程公告，未读的排在前面"),
-            new NavItem("completed", "已完成", "\uE73E", "雨课堂判定已完成的作业"),
-            new NavItem("all", "全部", "\uE8FD", "作业与公告的全部内容"),
+            new NavItem("myday", "我的一天", "\uF185", "今天到期与已过期的事项"),
+            new NavItem("planned", "计划内", "\uF133", "所有有截止时间的事项，按时间排序"),
+            new NavItem("homework", "作业", "\uF19D", "全部作业及其作答进度"),
+            new NavItem("announcement", "公告", "\uF0A1", "课程公告，未读的排在前面"),
+            new NavItem("completed", "已完成", "\uF058", "雨课堂判定已完成的作业"),
+            new NavItem("all", "全部", "\uF03A", "作业与公告的全部内容"),
         ];
 
         _selectedNav = NavItems[0];

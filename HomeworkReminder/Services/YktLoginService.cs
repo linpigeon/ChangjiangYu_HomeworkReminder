@@ -39,6 +39,15 @@ public sealed class YktLoginService
     private const string LoginUrl = "https://changjiang.yuketang.cn/web?ykt_ai_login";
 
     /// <summary>
+    /// 平台钩子：Avalonia 的 CookieManager 抽象在 Android 上不可用（返回 null），
+    /// Android 头会注入原生 CookieManager 的读取实现。
+    /// </summary>
+    public static Func<Task<YktSession?>>? SessionReaderOverride { get; set; }
+
+    /// <summary>平台钩子：同上，退出登录时的 Cookie 清除。</summary>
+    public static Func<Task<CookieClearResult>>? CookieClearOverride { get; set; }
+
+    /// <summary>
     /// 在页面上下文里探测登录态，返回 HTTP 状态码字符串（尚未拿到时返回空串）。
     /// <para>
     /// <b>脚本必须同步返回，不能返回 Promise。</b>实测结论（同一页面内对照）：
@@ -157,20 +166,25 @@ public sealed class YktLoginService
             if (reported != LoginPhase.WaitingForScan)
             {
                 reported = LoginPhase.WaitingForScan;
+                // Android 上登录页已自动切到账号表单（手机就是微信本体，扫不了自己的码）。
                 progress?.Report(new LoginStatus(LoginPhase.WaitingForScan,
-                    "请用微信扫描上方二维码完成登录…"));
+                    OperatingSystem.IsAndroid()
+                        ? "请在上方页面登录（手机号/短信/邮箱均可）…"
+                        : "请用微信扫描上方二维码完成登录…"));
             }
             else if (probes % 12 == 0)
             {
                 // 让等待过程可见，否则界面看起来像卡死了。
                 var left = Math.Max(0, (int)(deadline - DateTimeOffset.Now).TotalMinutes);
                 progress?.Report(new LoginStatus(LoginPhase.WaitingForScan,
-                    $"仍在等待扫码…（剩余约 {left} 分钟，当前页面返回 {status}）"));
+                    OperatingSystem.IsAndroid()
+                        ? $"仍在等待登录…（剩余约 {left} 分钟）"
+                        : $"仍在等待扫码…（剩余约 {left} 分钟，当前页面返回 {status}）"));
             }
         }
 
         progress?.Report(new LoginStatus(LoginPhase.Failed,
-            $"等待扫码超时（{(int)limit.TotalMinutes} 分钟），请重新登录。"));
+            $"等待登录超时（{(int)limit.TotalMinutes} 分钟），请重试。"));
         return null;
     }
 
@@ -245,6 +259,9 @@ public sealed class YktLoginService
     /// </summary>
     public static async Task<CookieClearResult> ClearCookiesAsync(NativeWebView webView)
     {
+        if (CookieClearOverride is not null)
+            return await CookieClearOverride().ConfigureAwait(true);
+
         try
         {
             var manager = webView.TryGetCookieManager();
@@ -324,6 +341,10 @@ public sealed class YktLoginService
     {
         if (universityId == 0) universityId = AppSettings.Current.UniversityId;
         if (term == 0) term = AppSettings.Current.Term;
+
+        // Android：Avalonia 的 CookieManager 抽象不可用，走平台注入的原生读取。
+        if (SessionReaderOverride is not null)
+            return await SessionReaderOverride().ConfigureAwait(true);
 
         var manager = webView.TryGetCookieManager();
         if (manager is null) return null;

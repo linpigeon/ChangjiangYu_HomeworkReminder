@@ -89,7 +89,9 @@
 
             </ResourceDictionary.ThemeDictionaries>
 
-            <FontFamily x:Key="TodoIconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+            <!-- 图标字体：内嵌 Font Awesome 6 Free（CC BY 4.0，见 Assets/Fonts/FONT-LICENSE.txt），
+                 全平台一致；Segoe 系是 Windows 系统字体，Android/iOS 上会显示成方框。 -->
+            <FontFamily x:Key="TodoIconFont">avares://HomeworkReminder/Assets/Fonts/fa-solid-900.ttf#Font Awesome 6 Free Solid, Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         </ResourceDictionary>
 
         <!--

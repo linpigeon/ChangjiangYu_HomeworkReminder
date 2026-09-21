@@ -254,6 +254,13 @@ GET /v2/api/web/zzz-fake-control-99999?classroom_id=26109238    → {"errcode":0
 
 ## 8. 当前用户资料
 
+> **2026-09-21 更新（Android 实测）**：`/api/v3/*` 在 Envoy 网关（`cube-api-gateway`）后面，
+> 对 Java/Conscrypt 协议栈（.NET Android 的默认 `HttpClientHandler`）一律返回
+> `{"code":50000,"msg":"UNAUTHENTICATED"}`；`/v/*` 系（如 `/v/course_meta/user_info`）
+> 对同一协议栈返回 `web_redirect` 跳转。**两类问题在换用托管 `SocketsHttpHandler` 后都消失**
+> （推测网关按 TLS/HTTP 指纹区分客户端）。现在资料接口主用 `/v/course_meta/user_info`，
+> v3 仅作兜底；HTTP 栈统一为 SocketsHttpHandler。
+
 ```
 GET /api/v3/user/basic-info
 → {"code":0,"msg":"OK","data":{
@@ -270,7 +277,7 @@ GET /api/v3/user/basic-info
 | 端点 | 结构 |
 |---|---|
 | `/v2/api/web/userinfo` | `data` 是**数组**：`[{"name":"…","user_id":…,"school_number":"…","avatar":"…"}]` |
-| `/v/course_meta/user_info` | `data.user_profile.{name,nickname,school,avatar,phone_number}` |
+| `/v/course_meta/user_info` | `data.user_profile.{name,nickname,school,avatar,phone_number}`（蛇形命名 `school_number`） |
 
 **头像的两个注意点：**
 

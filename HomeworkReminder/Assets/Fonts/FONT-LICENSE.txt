@@ -1,0 +1,4 @@
+本目录内字体来自 Font Awesome Free 6.7.2（https://fontawesome.com），
+图标部分采用 CC BY 4.0 许可证（https://creativecommons.org/licenses/by/4.0/），
+字体文件采用 SIL OFL 1.1 许可证。
+作者：Fonticons, Inc.（https://fontawesome.com）

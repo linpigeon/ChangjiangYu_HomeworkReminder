@@ -44,7 +44,7 @@
 
           <Button Grid.Column="1" Classes="tool" Click="OnRefreshClick"
                   ToolTip.Tip="立即同步（再次点击可取消）">
-            <TextBlock Classes="icon" Text="&#xE72C;" />
+            <TextBlock Classes="icon" Text="&#xF021;" />
           </Button>
         </Grid>
 
@@ -94,7 +94,7 @@
             <Button Classes="outline" Content="退出登录" Click="OnLogoutClick"
                     HorizontalAlignment="Left" Padding="10,5" FontSize="11" />
             <Button Classes="tool" ToolTip.Tip="外观设置">
-              <TextBlock Classes="icon" Text="&#xE713;" />
+              <TextBlock Classes="icon" Text="&#xF013;" />
               <Button.Flyout>
                 <Flyout Placement="TopEdgeAlignedLeft">
                   <StackPanel Spacing="10" MinWidth="240" Margin="4">
@@ -146,12 +146,12 @@
             <Button Classes="tool" Click="OnMarkAllReadClick"
                     IsVisible="{Binding ShowUnreadBadge}"
                     ToolTip.Tip="把公告全部标记为已读（雨课堂只提供「全部已读」接口）">
-              <TextBlock Classes="icon" Text="&#xE8C3;" />
+              <TextBlock Classes="icon" Text="&#xF560;" />
             </Button>
             <Button Classes="tool" Click="OnOpenSourceClick"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}"
                     ToolTip.Tip="在浏览器中打开该课程在雨课堂的日志页（作业与公告都在这里）">
-              <TextBlock Classes="icon" Text="&#xE8A7;" />
+              <TextBlock Classes="icon" Text="&#xF35D;" />
             </Button>
           </StackPanel>
         </Grid>
@@ -255,7 +255,7 @@
         <Border Grid.Row="3" IsVisible="{Binding IsBusy}"
                 Background="{DynamicResource TodoAccentSoft}" Padding="14,8">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Classes="icon" Text="&#xE895;" FontSize="13"
+            <TextBlock Classes="icon" Text="&#xF021;" FontSize="13"
                        Foreground="{DynamicResource TodoAccent}" />
             <TextBlock Text="{Binding SyncStatus}" FontSize="12"
                        Foreground="{DynamicResource TodoAccent}" VerticalAlignment="Center" />
@@ -270,7 +270,7 @@
         <!-- 未选中 -->
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}">
-          <TextBlock Classes="icon large" Text="&#xE7C3;" FontSize="34"
+          <TextBlock Classes="icon large" Text="&#xF01C;" FontSize="34"
                      HorizontalAlignment="Center"
                      Foreground="{DynamicResource TodoTextTertiary}" />
           <TextBlock Classes="faint" Text="选择左侧任意事项查看详情"

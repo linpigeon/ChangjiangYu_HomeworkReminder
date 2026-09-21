@@ -49,7 +49,7 @@ public partial class TodoItemViewModel(TodoItem model) : ViewModelBase
     public bool ShowRemainingOverdue => ShowRemaining && IsOverdue;
 
     /// <summary>试卷类作业在标题上带「作业」字样，用它选图标。</summary>
-    public string Glyph => Kind == TodoKind.Announcement ? "\uE7E7" : "\uE7C3";
+    public string Glyph => Kind == TodoKind.Announcement ? "\uF0A1" : "\uF19D";
 
     /// <summary>未开始 vs 进行中，用于列表里的进度徽标着色。</summary>
     public bool ShowProgress => Kind == TodoKind.Homework && Model.Total is > 0;

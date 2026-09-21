@@ -123,6 +123,11 @@ public partial class App : Application
                 _trayIcon?.Dispose();
             };
         }
+        else if (ApplicationLifetime is IActivityApplicationLifetime activityLifetime)
+        {
+            // Android 12+ 生命周期：activity 可能被销毁重建，所以给的是工厂而不是实例。
+            activityLifetime.MainViewFactory = () => new MainView { DataContext = ViewModel };
+        }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
             singleViewPlatform.MainView = new MainView { DataContext = ViewModel };

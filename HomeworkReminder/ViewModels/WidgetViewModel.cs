@@ -28,10 +28,10 @@ public sealed partial class WidgetViewModel : ViewModelBase
 
         Groups =
         [
-            new WidgetGroup("myday", "我的一天", "\uE706"),    // Brightness（太阳）
-            new WidgetGroup("homework", "作业", "\uE7BE"),     // Education
-            new WidgetGroup("planned", "计划内", "\uE787"),    // Calendar
-            new WidgetGroup("all", "所有", "\uE8FD"),          // BulletedList
+            new WidgetGroup("myday", "我的一天", "\uF185"),    // 太阳
+            new WidgetGroup("homework", "作业", "\uF19D"),     // 学士帽
+            new WidgetGroup("planned", "计划内", "\uF133"),    // 日历
+            new WidgetGroup("all", "所有", "\uF03A"),          // 列表
         ];
 
         _selectedGroup = Groups.FirstOrDefault(g => g.Key == AppSettings.Current.WidgetGroup) ?? Groups[0];

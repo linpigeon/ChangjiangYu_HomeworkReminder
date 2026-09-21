@@ -113,6 +113,11 @@ public sealed class YktUserProfile
     [JsonPropertyName("avatar")] public string? Avatar { get; set; }
     [JsonPropertyName("school")] public string? School { get; set; }
     [JsonPropertyName("schoolNumber")] public string? SchoolNumber { get; set; }
+
+    /// <summary>/v/course_meta/user_info 用蛇形命名；只写不入的别名。</summary>
+    [JsonPropertyName("school_number")]
+    public string? SchoolNumberSnake { set => SchoolNumber = value; }
+
     [JsonPropertyName("role")] public int? Role { get; set; }
 
     /// <summary>界面上显示的名字：优先实名，退回昵称，再退回学号。</summary>

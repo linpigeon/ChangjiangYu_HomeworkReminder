@@ -45,7 +45,7 @@
       <!-- WebView 尚未挂载时的占位，避免中间一片空白 -->
       <StackPanel Name="WebViewPlaceholder" VerticalAlignment="Center" Spacing="10"
                   HorizontalAlignment="Center" IsVisible="True">
-        <TextBlock Classes="icon" Text="&#xE8D7;" FontSize="34"
+        <TextBlock Classes="icon" Text="&#xF029;" FontSize="34"
                    HorizontalAlignment="Center"
                    Foreground="{DynamicResource TodoTextTertiary}" />
         <TextBlock Text="正在准备登录页…" FontSize="13" HorizontalAlignment="Center"
@@ -90,7 +90,7 @@
 
       <!-- 一行状态：二维码下方 -->
       <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-        <TextBlock Classes="icon" Text="&#xE72E;" FontSize="13"
+        <TextBlock Classes="icon" Text="&#xF05A;" FontSize="13"
                    Foreground="{DynamicResource TodoTextTertiary}"
                    IsVisible="{Binding IsBusy}" />
         <TextBlock Text="{Binding LoginStatusText}" FontSize="12"
@@ -116,7 +116,7 @@
               Click="OnStartLoginClick"
               IsEnabled="{Binding !IsCheckingLogin}"
               ToolTip.Tip="{Binding LoginButtonText}">
-        <TextBlock Classes="icon" Text="&#xE72C;" FontSize="14"
+        <TextBlock Classes="icon" Text="&#xF021;" FontSize="14"
                    Foreground="{DynamicResource TodoTextSecondary}" />
       </Button>
     </Grid>

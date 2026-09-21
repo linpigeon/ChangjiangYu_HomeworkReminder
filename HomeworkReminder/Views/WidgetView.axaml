@@ -50,19 +50,19 @@
           <Button Classes="widgettool" Classes.syncing="{Binding IsSyncing}"
                   Click="OnSyncClick"
                   ToolTip.Tip="立即同步">
-            <TextBlock Text="&#xE72C;" FontFamily="{StaticResource TodoIconFont}"
+            <TextBlock Text="&#xF021;" FontFamily="{StaticResource TodoIconFont}"
                        FontSize="13" Foreground="{DynamicResource TodoTextSecondary}"
                        RenderTransform="rotate(0)"
                        RenderTransformOrigin="50%,50%" />
           </Button>
           <Button Classes="widgettool" Click="OnOpenMainClick"
                   ToolTip.Tip="打开主界面">
-            <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource TodoIconFont}"
+            <TextBlock Text="&#xF35D;" FontFamily="{StaticResource TodoIconFont}"
                        FontSize="13" Foreground="{DynamicResource TodoTextSecondary}" />
           </Button>
           <Button Classes="widgettool" Click="OnCloseClick"
                   ToolTip.Tip="关闭小组件">
-            <TextBlock Text="&#xE711;" FontFamily="{StaticResource TodoIconFont}"
+            <TextBlock Text="&#xF00D;" FontFamily="{StaticResource TodoIconFont}"
                        FontSize="12" Foreground="{DynamicResource TodoTextSecondary}" />
           </Button>
         </StackPanel>

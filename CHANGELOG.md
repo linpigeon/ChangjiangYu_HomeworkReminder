@@ -1,5 +1,23 @@
 # 发布日志
 
+## v1.1.1（2026-09-21）
+
+### 新增
+
+- **Android 端可用**：登录 / 同步 / 待办列表全链路在 Android（API 23+）验证通过；
+  登录页自动切换为账号登录（手机号/短信/邮箱，手机扫不了自己屏幕上的二维码），
+  Cookie 读取走原生 CookieManager 钩子
+- **图标字体改为内嵌 Font Awesome 6 Free**（CC BY 4.0）：Segoe 系是 Windows 系统字体，
+  Android 上显示为方框；现在全平台同一套图标
+
+### 修复
+
+- Android 用户资料不显示（「未登录」无头像）：`/api/v3/*` 在雨课堂 Envoy 网关后，
+  对 .NET Android 默认的 Java 原生 HTTP 栈一律 UNAUTHENTICATED；
+  HTTP 栈改为一律使用托管 SocketsHttpHandler（与桌面一致），
+  资料端点主用 `/v/course_meta/user_info`（信息更全），v3 兜底
+- Android Debug 包直接安装闪退（快速部署的 APK 不含程序集）：Release 构建正常
+
 ## v1.1.0（2026-09-21）
 
 ### 新增

@@ -55,7 +55,7 @@
                 <TextBlock Text="{Binding Label}" FontSize="13"
                            Foreground="{DynamicResource TodoTextPrimary}"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <TextBlock Text="&#xE73E;" FontFamily="{StaticResource TodoIconFont}"
+                <TextBlock Text="&#xF00C;" FontFamily="{StaticResource TodoIconFont}"
                            FontSize="12" Foreground="{DynamicResource TodoTextPrimary}"
                            IsVisible="{Binding IsChecked}"
                            HorizontalAlignment="Left" VerticalAlignment="Center" />

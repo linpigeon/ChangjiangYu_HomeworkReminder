@@ -80,6 +80,21 @@ public partial class LoginView : UserControl
         "},700);}" +
         "return 'ok';})()";
 
+    /// <summary>
+    /// Android 用的登录页脚本：手机就是微信本体，扫不了自己屏幕上的二维码——
+    /// 自动点卡片右上角的「翻角」切到账号登录（手机/短信/邮箱）。
+    /// 桌面那套整理样式（白色遮罩、隐藏翻角）不能注入，否则会把表单盖住。
+    /// 翻角点击是「切换」，所以用一次性标记防止重复注入时来回翻。
+    /// </summary>
+    private const string AccountModeScript =
+        "(()=>{" +
+        "if(!window.__hrAccountSwitch){" +
+        "window.__hrAccountSwitch=setInterval(function(){" +
+        "var t=document.querySelector('.changeImg');" +
+        "if(t){t.click();clearInterval(window.__hrAccountSwitch);window.__hrAccountSwitch=1;}" +
+        "},400);}" +
+        "return 'ok';})()";
+
     /// <summary>DOM 摘要脚本，仅在 HWREMINDER_LOGIN_DOM_DUMP=1 时用于排查页面结构。</summary>
     private const string DomDumpScript =
         "(()=>{var R=e=>{var r=e.getBoundingClientRect();return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)].join(',');};" +
@@ -116,12 +131,15 @@ public partial class LoginView : UserControl
     {
         try
         {
-            await LoginWebView.InvokeScript(LoginPageStyleScript).ConfigureAwait(true);
+            // Android 上扫码无意义（微信就在本机），直接切账号登录；
+            // 桌面端沿用 QR 卡片的美化脚本。
+            var script = OperatingSystem.IsAndroid() ? AccountModeScript : LoginPageStyleScript;
+            await LoginWebView.InvokeScript(script).ConfigureAwait(true);
 
             foreach (var delay in new[] { 1, 2, 3 })
             {
                 await Task.Delay(TimeSpan.FromSeconds(delay)).ConfigureAwait(true);
-                await LoginWebView.InvokeScript(LoginPageStyleScript).ConfigureAwait(true);
+                await LoginWebView.InvokeScript(script).ConfigureAwait(true);
             }
 
             if (Environment.GetEnvironmentVariable("HWREMINDER_LOGIN_DOM_DUMP") == "1")

@@ -69,7 +69,10 @@ public sealed class YktApiClient : IYktApi, IDisposable
     {
         Session = session ?? throw new ArgumentNullException(nameof(session));
         _ownsHttp = http is null;
-        _http = http ?? new HttpClient(new HttpClientHandler
+        // 用托管的 SocketsHttpHandler 而不是平台原生 handler：Android 上 HttpClientHandler
+        // 走 Java HttpURLConnection，雨课堂的 /api/v3 与 /v/ 端点（Envoy 网关）对它一律
+        // 返回 UNAUTHENTICATED/web_redirect，v2 系却正常；托管栈与桌面行为一致，没有这个问题。
+        _http = http ?? new HttpClient(new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
         })
@@ -195,24 +198,31 @@ public sealed class YktApiClient : IYktApi, IDisposable
     {
         try
         {
-            // 实测该端点把用户信息放在 data 对象里，name 是实名，nickname 多为「微信用户」。
-            var data = await GetDataAsync("/api/v3/user/basic-info", ct).ConfigureAwait(false);
-            if (data.ValueKind != JsonValueKind.Object) return null;
+            // 主用 v 系端点：/api/v3/* 在 API 网关（Envoy）后面，
+            // 实测 Android 原生 HTTP 栈打过去一律 UNAUTHENTICATED（v2/v 系正常），原因未明。
+            var data = await GetDataAsync("/v/course_meta/user_info", ct).ConfigureAwait(false);
+            if (data.ValueKind == JsonValueKind.Object
+                && data.TryGetProperty("user_profile", out var up)
+                && up.ValueKind == JsonValueKind.Object)
+            {
+                var p = up.Deserialize(AppJsonContext.Default.YktUserProfile);
+                if (!string.IsNullOrWhiteSpace(p?.DisplayName)) return p;
+            }
 
-            var profile = data.Deserialize(AppJsonContext.Default.YktUserProfile);
+            // 兜底：老的 v3 端点（桌面端一直可用）。
+            var legacy = await GetDataAsync("/api/v3/user/basic-info", ct).ConfigureAwait(false);
+            if (legacy.ValueKind != JsonValueKind.Object) return null;
+
+            var profile = legacy.Deserialize(AppJsonContext.Default.YktUserProfile);
             return string.IsNullOrWhiteSpace(profile?.DisplayName) ? null : profile;
         }
         catch (YktAuthExpiredException)
         {
             throw;
         }
-        catch (YktApiException)
+        catch (Exception ex) when (ex is YktApiException or System.Text.Json.JsonException)
         {
             // 纯展示信息，拿不到就退回「已登录」文案。
-            return null;
-        }
-        catch (System.Text.Json.JsonException)
-        {
             return null;
         }
     }
