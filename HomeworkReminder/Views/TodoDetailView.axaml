@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="600"
+             x:Class="HomeworkReminder.Views.TodoDetailView"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    待办详情。宽屏：三栏布局的右列；窄屏（手机）：选中事项后作为二级页面全屏覆盖，
+    由宿主加返回键。空态与详情二选一，由 SelectedItem 驱动。
+  -->
+  <Panel>
+    <!-- 未选中 -->
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10"
+                IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}">
+      <TextBlock Classes="icon large" Text="&#xF01C;" FontSize="34"
+                 HorizontalAlignment="Center"
+                 Foreground="{DynamicResource TodoTextTertiary}" />
+      <TextBlock Classes="faint" Text="选择左侧任意事项查看详情"
+                 HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <!-- 详情 -->
+    <ScrollViewer IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <StackPanel Margin="26,22" Spacing="18" DataContext="{Binding SelectedItem}"
+                  x:DataType="vm:TodoItemViewModel">
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding Title}" FontSize="19" FontWeight="SemiBold"
+                     TextWrapping="Wrap"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+          <TextBlock Classes="meta" Text="{Binding CourseName}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Spacing="2">
+          <TextBlock Classes="faint" Text="截止时间" />
+          <TextBlock Text="{Binding DueText}" FontSize="14"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+          <TextBlock Classes="overdue" Text="{Binding RemainingText}"
+                     IsVisible="{Binding IsOverdue}" />
+        </StackPanel>
+
+        <StackPanel Spacing="2" IsVisible="{Binding ShowProgress}">
+          <TextBlock Classes="faint" Text="作答进度（来自雨课堂）" />
+          <TextBlock Text="{Binding ProgressText}" FontSize="14"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+        </StackPanel>
+
+        <StackPanel Spacing="2">
+          <TextBlock Classes="faint" Text="雨课堂完成状态" />
+          <TextBlock Text="{Binding StatusText}" FontSize="14"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+        </StackPanel>
+
+        <StackPanel Spacing="2">
+          <TextBlock Classes="faint" Text="应用内标记" />
+          <TextBlock Text="{Binding DoneLabel}" FontSize="14"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+        </StackPanel>
+
+        <CheckBox Classes="todo" Content="在应用内标记为已处理"
+                  IsChecked="{Binding IsDone, Mode=OneWay}"
+                  Click="OnCheckboxClick" />
+
+        <Button Classes="primary" Content="在浏览器中打开该课程"
+                HorizontalAlignment="Left"
+                Click="OnOpenSourceClick"
+                IsVisible="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </ScrollViewer>
+  </Panel>
+</UserControl>

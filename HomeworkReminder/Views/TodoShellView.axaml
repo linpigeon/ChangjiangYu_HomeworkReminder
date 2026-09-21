@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:views="using:HomeworkReminder.Views"
              xmlns:models="using:HomeworkReminder.Models"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -8,134 +9,16 @@
              x:Class="HomeworkReminder.Views.TodoShellView"
              x:DataType="vm:MainViewModel">
 
+  <!-- 外层容器：三栏基础布局 + 窄屏浮层（详情二级页 / 抽屉遮罩 / 抽屉） -->
+  <Grid>
   <Grid>
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="{Binding SidebarColumnWidth}" />
       <ColumnDefinition Width="400" />
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
-    <!-- ==================== 左：侧边栏 ==================== -->
-    <!-- ClipToBounds：列宽收起为 0 时内容不能溢出绘制 -->
-    <Border Grid.Column="0" Background="{Binding SidebarBrush}" ClipToBounds="True">
-      <Grid RowDefinitions="Auto,*,Auto">
-
-        <!-- 顶部：用户 + 刷新 -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="16,14,10,10">
-          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-            <!-- 头像：有图用图，没图用姓名首字占位 -->
-            <Panel Width="34" Height="34" VerticalAlignment="Center">
-              <Border CornerRadius="17" Background="{DynamicResource TodoAccent}"
-                      IsVisible="{Binding !HasAvatar}">
-                <TextBlock Text="{Binding UserInitial}" Foreground="White"
-                           FontSize="15" FontWeight="SemiBold"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-              </Border>
-              <Border CornerRadius="17" ClipToBounds="True" IsVisible="{Binding HasAvatar}">
-                <Image Source="{Binding UserAvatar}" Stretch="UniformToFill" />
-              </Border>
-            </Panel>
-
-            <StackPanel VerticalAlignment="Center" MaxWidth="150">
-              <TextBlock Text="{Binding UserName}" FontSize="13" FontWeight="SemiBold"
-                         Foreground="{DynamicResource TodoTextPrimary}"
-                         TextTrimming="CharacterEllipsis"
-                         ToolTip.Tip="{Binding UserName}" />
-              <TextBlock Text="{Binding UserSubtitle}" FontSize="11"
-                         Foreground="{DynamicResource TodoTextTertiary}"
-                         TextTrimming="CharacterEllipsis"
-                         ToolTip.Tip="{Binding UserSubtitle}" />
-            </StackPanel>
-          </StackPanel>
-
-          <Button Grid.Column="1" Classes="tool" Click="OnRefreshClick"
-                  ToolTip.Tip="立即同步（再次点击可取消）">
-            <TextBlock Classes="icon" Text="&#xF021;" />
-          </Button>
-        </Grid>
-
-        <!-- 导航 -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-          <ItemsControl ItemsSource="{Binding NavItems}" Margin="6,4">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:NavItem">
-                <Border Name="NavRow" Classes="navrow"
-                        Classes.selected="{Binding IsSelected}"
-                        PointerPressed="OnNavPressed"
-                        Margin="0,1">
-                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,8">
-                    <TextBlock Grid.Column="0" Classes="icon" Text="{Binding Glyph}"
-                               Foreground="{DynamicResource TodoAccent}" />
-                    <TextBlock Grid.Column="1" Text="{Binding Label}" Margin="12,0,0,0"
-                               FontSize="13" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TodoTextPrimary}" />
-                    <Border Grid.Column="2" Classes="badge" IsVisible="{Binding HasBadge}">
-                      <TextBlock Text="{Binding BadgeText}" />
-                    </Border>
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
-
-        <!-- 底部：登录态与同步状态 -->
-        <StackPanel Grid.Row="2" Margin="16,8,16,14" Spacing="6">
-          <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="11" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TodoTextSecondary}" />
-          <TextBlock Text="{Binding LoginStatusText}" FontSize="11"
-                     Foreground="{DynamicResource TodoTextTertiary}"
-                     TextWrapping="Wrap" />
-          <TextBlock Text="{Binding SyncStatus}" FontSize="11"
-                     Foreground="{DynamicResource TodoTextTertiary}"
-                     TextWrapping="Wrap" />
-          <TextBlock Text="{Binding CacheNote}" FontSize="11"
-                     Foreground="{DynamicResource TodoTextTertiary}"
-                     TextWrapping="Wrap"
-                     IsVisible="{Binding CacheNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <TextBlock Text="{Binding StatusDetail}" FontSize="11"
-                     Foreground="{DynamicResource TodoTextTertiary}"
-                     TextWrapping="Wrap" />
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Button Classes="outline" Content="退出登录" Click="OnLogoutClick"
-                    HorizontalAlignment="Left" Padding="10,5" FontSize="11" />
-            <Button Classes="tool" ToolTip.Tip="外观设置">
-              <TextBlock Classes="icon" Text="&#xF013;" />
-              <Button.Flyout>
-                <Flyout Placement="TopEdgeAlignedLeft">
-                  <StackPanel Spacing="10" MinWidth="240" Margin="4">
-                    <TextBlock Text="外观" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TodoTextPrimary}" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <TextBlock Text="主题" FontSize="12" VerticalAlignment="Center"
-                                 Foreground="{DynamicResource TodoTextSecondary}" />
-                      <ComboBox SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}"
-                                HorizontalAlignment="Stretch" MinWidth="130">
-                        <ComboBoxItem>浅色</ComboBoxItem>
-                        <ComboBoxItem>深色</ComboBoxItem>
-                        <ComboBoxItem>跟随系统</ComboBoxItem>
-                      </ComboBox>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="outline" Content="选择壁纸…"
-                              Click="OnPickWallpaperClick" Padding="10,5" FontSize="12" />
-                      <Button Classes="tool" Content="清除壁纸"
-                              Click="OnClearWallpaperClick"
-                              IsVisible="{Binding HasWallpaper}" />
-                    </StackPanel>
-                    <TextBlock FontSize="11" TextWrapping="Wrap"
-                               Foreground="{DynamicResource TodoTextTertiary}"
-                               Text="背景透明度：越大越透——有壁纸时透出壁纸，没有壁纸时透出桌面磨砂。" />
-                    <Slider Minimum="0" Maximum="85" TickFrequency="5"
-                            Value="{Binding WallpaperOpacityPercent, Mode=TwoWay}" />
-                  </StackPanel>
-                </Flyout>
-              </Button.Flyout>
-            </Button>
-          </StackPanel>
-        </StackPanel>
-      </Grid>
-    </Border>
-
+    <!-- ==================== 左：侧边栏（宽屏栏位；窄屏时列宽归零，改走覆盖式抽屉） ==================== -->
+    <views:SidebarView Grid.Column="0" ClipToBounds="True" />
     <!-- ==================== 中：待办列表 ==================== -->
     <Border Grid.Column="1" Background="{Binding ListBrush}"
             BorderBrush="{DynamicResource TodoBorder}" BorderThickness="0,0,1,0">
@@ -274,68 +157,39 @@
       </Grid>
     </Border>
 
-    <!-- ==================== 右：详情 ==================== -->
-    <Border Grid.Column="2" Background="{Binding SurfaceBrush}">
-      <Panel>
-        <!-- 未选中 -->
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10"
-                    IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}">
-          <TextBlock Classes="icon large" Text="&#xF01C;" FontSize="34"
-                     HorizontalAlignment="Center"
-                     Foreground="{DynamicResource TodoTextTertiary}" />
-          <TextBlock Classes="faint" Text="选择左侧任意事项查看详情"
-                     HorizontalAlignment="Center" />
-        </StackPanel>
-
-        <!-- 详情 -->
-        <ScrollViewer IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <StackPanel Margin="26,22" Spacing="18" DataContext="{Binding SelectedItem}"
-                      x:DataType="vm:TodoItemViewModel">
-
-            <StackPanel Spacing="6">
-              <TextBlock Text="{Binding Title}" FontSize="19" FontWeight="SemiBold"
-                         TextWrapping="Wrap"
-                         Foreground="{DynamicResource TodoTextPrimary}" />
-              <TextBlock Classes="meta" Text="{Binding CourseName}" TextWrapping="Wrap" />
-            </StackPanel>
-
-            <StackPanel Spacing="2">
-              <TextBlock Classes="faint" Text="截止时间" />
-              <TextBlock Text="{Binding DueText}" FontSize="14"
-                         Foreground="{DynamicResource TodoTextPrimary}" />
-              <TextBlock Classes="overdue" Text="{Binding RemainingText}"
-                         IsVisible="{Binding IsOverdue}" />
-            </StackPanel>
-
-            <StackPanel Spacing="2" IsVisible="{Binding ShowProgress}">
-              <TextBlock Classes="faint" Text="作答进度（来自雨课堂）" />
-              <TextBlock Text="{Binding ProgressText}" FontSize="14"
-                         Foreground="{DynamicResource TodoTextPrimary}" />
-            </StackPanel>
-
-            <StackPanel Spacing="2">
-              <TextBlock Classes="faint" Text="雨课堂完成状态" />
-              <TextBlock Text="{Binding StatusText}" FontSize="14"
-                         Foreground="{DynamicResource TodoTextPrimary}" />
-            </StackPanel>
-
-            <StackPanel Spacing="2">
-              <TextBlock Classes="faint" Text="应用内标记" />
-              <TextBlock Text="{Binding DoneLabel}" FontSize="14"
-                         Foreground="{DynamicResource TodoTextPrimary}" />
-            </StackPanel>
-
-            <CheckBox Classes="todo" Content="在应用内标记为已处理"
-                      IsChecked="{Binding IsDone, Mode=OneWay}"
-                      Click="OnCheckboxClick" />
-
-            <Button Classes="primary" Content="在浏览器中打开该课程"
-                    HorizontalAlignment="Left"
-                    Click="OnOpenSourceClick"
-                    IsVisible="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          </StackPanel>
-        </ScrollViewer>
-      </Panel>
-    </Border>
+    <!-- ==================== 右：详情（宽屏右列；窄屏改二级页浮层） ==================== -->
+    <views:TodoDetailView Grid.Column="2" Background="{Binding SurfaceBrush}" />
   </Grid>
+
+  <!-- 窄屏浮层：详情二级页（点选事项后全屏覆盖，左上角返回）。
+       背景必须用不透明的 DialogBackground：SurfaceBrush 为壁纸效果带透明度，
+       浮层会透出底下的列表。 -->
+  <Border Background="{DynamicResource TodoDialogBackground}"
+          IsVisible="{Binding DetailOverlayVisible}">
+    <Grid RowDefinitions="Auto,*">
+      <Button Grid.Row="0" Classes="tool" Click="OnDetailBackClick"
+              Margin="10,10,0,0" HorizontalAlignment="Left"
+              ToolTip.Tip="返回列表">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Classes="icon" Text="&#xF060;" />
+          <TextBlock Text="返回" FontSize="13" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TodoTextSecondary}" />
+        </StackPanel>
+      </Button>
+      <views:TodoDetailView Grid.Row="1" />
+    </Grid>
+  </Border>
+
+  <!-- 窄屏浮层：抽屉遮罩（点遮罩收起） -->
+  <Border Background="#66000000"
+          IsVisible="{Binding DrawerOpen}"
+          PointerPressed="OnDrawerScrimPressed" />
+
+  <!-- 窄屏浮层：覆盖式抽屉（点 ☰ 展开，选导航/点遮罩收起） -->
+  <Border IsVisible="{Binding DrawerOpen}"
+          HorizontalAlignment="Left" Width="300"
+          BoxShadow="4 0 24 0 #40000000">
+    <views:SidebarView />
+  </Border>
+</Grid>
 </UserControl>

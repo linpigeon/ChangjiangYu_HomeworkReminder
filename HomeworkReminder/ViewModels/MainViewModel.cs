@@ -205,18 +205,43 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private Bitmap? _wallpaperImage;
 
-    /// <summary>侧边栏是否收起（窄屏自动收起，也可手动切换）。</summary>
+    /// <summary>侧边栏是否收起（宽屏手动切换；窄屏恒收起、改用抽屉）。</summary>
     [ObservableProperty]
     private bool _sidebarCollapsed;
 
-    /// <summary>侧边栏列宽：收起时归零，把空间让给列表。</summary>
+    /// <summary>窄屏布局（<700 DIP）：列表全屏，侧边栏改覆盖式抽屉，详情改二级页。</summary>
+    [ObservableProperty]
+    private bool _isCompactLayout;
+
+    /// <summary>窄屏下的覆盖式抽屉是否展开（宽屏下恒为 false）。</summary>
+    [ObservableProperty]
+    private bool _drawerOpen;
+
+    /// <summary>侧边栏列宽：收起或窄屏布局时归零，把空间让给列表。</summary>
     public Avalonia.Controls.GridLength SidebarColumnWidth =>
-        SidebarCollapsed ? new Avalonia.Controls.GridLength(0) : new Avalonia.Controls.GridLength(252);
+        SidebarCollapsed || IsCompactLayout
+            ? new Avalonia.Controls.GridLength(0)
+            : new Avalonia.Controls.GridLength(252);
 
     partial void OnSidebarCollapsedChanged(bool value) => OnPropertyChanged(nameof(SidebarColumnWidth));
 
-    /// <summary>切换侧边栏收起/展开。</summary>
-    public void ToggleSidebar() => SidebarCollapsed = !SidebarCollapsed;
+    partial void OnIsCompactLayoutChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SidebarColumnWidth));
+        OnPropertyChanged(nameof(DetailOverlayVisible));
+        // 切布局时抽屉归位：宽屏的抽屉状态没意义，回到窄屏也不该自动弹出。
+        DrawerOpen = false;
+    }
+
+    /// <summary>窄屏且选中了事项：详情作为二级页全屏覆盖。</summary>
+    public bool DetailOverlayVisible => IsCompactLayout && SelectedItem is not null;
+
+    /// <summary>切换侧边栏：窄屏切抽屉，宽屏切收起。</summary>
+    public void ToggleSidebar()
+    {
+        if (IsCompactLayout) DrawerOpen = !DrawerOpen;
+        else SidebarCollapsed = !SidebarCollapsed;
+    }
 
     [ObservableProperty]
     private bool _hasWallpaper;
@@ -1237,6 +1262,7 @@ public sealed partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedItemChanged(TodoItemViewModel? value)
     {
+        OnPropertyChanged(nameof(DetailOverlayVisible));
         if (value is null) return;
         foreach (var i in _cache) i.IsSelected = ReferenceEquals(i, value);
     }

@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="252" d:DesignHeight="700"
+             x:Class="HomeworkReminder.Views.SidebarView"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    侧边栏内容（用户资料 + 导航 + 状态栏）。
+    宽屏：放在三栏布局的第一列；窄屏（手机）：作为覆盖式抽屉浮层复用。
+    抽成 UserControl 就是为了两种布局共用同一份结构，样式不分叉。
+  -->
+  <Border Background="{Binding SidebarBrush}">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <!-- 顶部：用户 + 刷新 -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="16,14,10,10">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+          <!-- 头像：有图用图，没图用姓名首字占位 -->
+          <Panel Width="34" Height="34" VerticalAlignment="Center">
+            <Border CornerRadius="17" Background="{DynamicResource TodoAccent}"
+                    IsVisible="{Binding !HasAvatar}">
+              <TextBlock Text="{Binding UserInitial}" Foreground="White"
+                         FontSize="15" FontWeight="SemiBold"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <Border CornerRadius="17" ClipToBounds="True" IsVisible="{Binding HasAvatar}">
+              <Image Source="{Binding UserAvatar}" Stretch="UniformToFill" />
+            </Border>
+          </Panel>
+
+          <StackPanel VerticalAlignment="Center" MaxWidth="150">
+            <TextBlock Text="{Binding UserName}" FontSize="13" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TodoTextPrimary}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding UserName}" />
+            <TextBlock Text="{Binding UserSubtitle}" FontSize="11"
+                       Foreground="{DynamicResource TodoTextTertiary}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding UserSubtitle}" />
+          </StackPanel>
+        </StackPanel>
+
+        <Button Grid.Column="1" Classes="tool" Click="OnRefreshClick"
+                ToolTip.Tip="立即同步（再次点击可取消）">
+          <TextBlock Classes="icon" Text="&#xF021;" />
+        </Button>
+      </Grid>
+
+      <!-- 导航 -->
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ItemsControl ItemsSource="{Binding NavItems}" Margin="6,4">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavItem">
+              <Border Name="NavRow" Classes="navrow"
+                      Classes.selected="{Binding IsSelected}"
+                      PointerPressed="OnNavPressed"
+                      Margin="0,1">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,8">
+                  <TextBlock Grid.Column="0" Classes="icon" Text="{Binding Glyph}"
+                             Foreground="{DynamicResource TodoAccent}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Label}" Margin="12,0,0,0"
+                             FontSize="13" VerticalAlignment="Center"
+                             Foreground="{DynamicResource TodoTextPrimary}" />
+                  <Border Grid.Column="2" Classes="badge" IsVisible="{Binding HasBadge}">
+                    <TextBlock Text="{Binding BadgeText}" />
+                  </Border>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- 底部：登录态与同步状态 -->
+      <StackPanel Grid.Row="2" Margin="16,8,16,14" Spacing="6">
+        <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="11" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TodoTextSecondary}" />
+        <TextBlock Text="{Binding LoginStatusText}" FontSize="11"
+                   Foreground="{DynamicResource TodoTextTertiary}"
+                   TextWrapping="Wrap" />
+        <TextBlock Text="{Binding SyncStatus}" FontSize="11"
+                   Foreground="{DynamicResource TodoTextTertiary}"
+                   TextWrapping="Wrap" />
+        <TextBlock Text="{Binding CacheNote}" FontSize="11"
+                   Foreground="{DynamicResource TodoTextTertiary}"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding CacheNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding StatusDetail}" FontSize="11"
+                   Foreground="{DynamicResource TodoTextTertiary}"
+                   TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Classes="outline" Content="退出登录" Click="OnLogoutClick"
+                  HorizontalAlignment="Left" Padding="10,5" FontSize="11" />
+          <Button Classes="tool" ToolTip.Tip="外观设置">
+            <TextBlock Classes="icon" Text="&#xF013;" />
+            <Button.Flyout>
+              <Flyout Placement="TopEdgeAlignedLeft">
+                <StackPanel Spacing="10" MinWidth="240" Margin="4">
+                  <TextBlock Text="外观" FontSize="13" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TodoTextPrimary}" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="主题" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TodoTextSecondary}" />
+                    <ComboBox SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch" MinWidth="130">
+                      <ComboBoxItem>浅色</ComboBoxItem>
+                      <ComboBoxItem>深色</ComboBoxItem>
+                      <ComboBoxItem>跟随系统</ComboBoxItem>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="outline" Content="选择壁纸…"
+                            Click="OnPickWallpaperClick" Padding="10,5" FontSize="12" />
+                    <Button Classes="tool" Content="清除壁纸"
+                            Click="OnClearWallpaperClick"
+                            IsVisible="{Binding HasWallpaper}" />
+                  </StackPanel>
+                  <TextBlock FontSize="11" TextWrapping="Wrap"
+                             Foreground="{DynamicResource TodoTextTertiary}"
+                             Text="背景透明度：越大越透——有壁纸时透出壁纸，没有壁纸时透出桌面磨砂。" />
+                  <Slider Minimum="0" Maximum="85" TickFrequency="5"
+                          Value="{Binding WallpaperOpacityPercent, Mode=TwoWay}" />
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

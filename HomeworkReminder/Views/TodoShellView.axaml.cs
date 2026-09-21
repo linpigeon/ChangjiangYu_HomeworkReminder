@@ -1,8 +1,6 @@
-using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using Avalonia;
 using HomeworkReminder.ViewModels;
@@ -10,11 +8,8 @@ using HomeworkReminder.ViewModels;
 namespace HomeworkReminder.Views;
 
 /// <summary>
-/// 主界面外壳：左侧导航 + 中间待办列表 + 右侧详情。
-/// <para>
-/// 交互放在 code-behind：勾选框与整行点击都需要知道「点的是哪一项」，
-/// 在 Avalonia 里用 Click/PointerPressed 事件配合 DataContext 判断最直接。
-/// </para>
+/// 主界面外壳：宽屏三栏（导航 / 列表 / 详情），窄屏（<700 DIP，手机竖屏）切换为
+/// 「列表全屏 + 覆盖式抽屉 + 详情二级页」。
 /// </summary>
 public partial class TodoShellView : UserControl
 {
@@ -24,59 +19,31 @@ public partial class TodoShellView : UserControl
         SizeChanged += OnSizeChanged;
     }
 
-    /// <summary>记录「窄屏自动收起」是我们做的，回到宽屏时只还原这种收起（不覆盖用户手动选择）。</summary>
-    private bool _autoCollapsed;
+    private MainViewModel? Vm => DataContext as MainViewModel;
 
-    /// <summary>窄屏（手机竖屏等）自动收起侧边栏，宽屏自动还原。</summary>
+    /// <summary>按宽度切宽屏/窄屏布局（窄屏自动收起成抽屉）。</summary>
     private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        if (Vm is not { } vm) return;
-        var narrow = Bounds.Width < 700;
-        if (narrow && !_autoCollapsed && !vm.SidebarCollapsed)
-        {
-            vm.SidebarCollapsed = true;
-            _autoCollapsed = true;
-        }
-        else if (!narrow && _autoCollapsed)
-        {
-            vm.SidebarCollapsed = false;
-            _autoCollapsed = false;
-        }
+        if (Vm is { } vm)
+            vm.IsCompactLayout = Bounds.Width < 700;
     }
 
     private void OnToggleSidebarClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm is not { } vm) return;
-        // 手动操作后，窄屏自动收起不再插手（直到尺寸再次跨过阈值方向）。
-        _autoCollapsed = false;
-        vm.ToggleSidebar();
+        // 窄屏切抽屉、宽屏切收起，模式判断在 VM 里。
+        Vm?.ToggleSidebar();
     }
 
-    private MainViewModel? Vm => DataContext as MainViewModel;
-
-    private void OnNavPressed(object? sender, PointerPressedEventArgs e)
+    /// <summary>点抽屉遮罩：收起抽屉。</summary>
+    private void OnDrawerScrimPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (Vm is not { } vm) return;
-        if (sender is not Border { DataContext: NavItem nav }) return;
-
-        vm.SelectedNav = nav;
-        vm.OnNavChanged();
+        if (Vm is { } vm) vm.DrawerOpen = false;
     }
 
-    private async void OnRefreshClick(object? sender, RoutedEventArgs e)
+    /// <summary>窄屏详情二级页的返回键。</summary>
+    private void OnDetailBackClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm) await vm.RefreshCommand.ExecuteAsync(null);
-    }
-
-    private async void OnLogoutClick(object? sender, RoutedEventArgs e)
-    {
-        if (Vm is not { } vm) return;
-
-        if (TopLevel.GetTopLevel(this) is Window w &&
-            !await MessageBox.ConfirmAsync(w, "退出登录", "将清除本机保存的雨课堂登录态，需要重新扫码。确定吗？"))
-            return;
-
-        await vm.LogoutCommand.ExecuteAsync(null);
+        if (Vm is { } vm) vm.SelectedItem = null;
     }
 
     private async void OnMarkAllReadClick(object? sender, RoutedEventArgs e)
@@ -124,38 +91,5 @@ public partial class TodoShellView : UserControl
 
         var item = (sender as Control)?.DataContext as TodoItemViewModel ?? vm.SelectedItem;
         if (item is not null) vm.OpenSource(item);
-    }
-
-    private async void OnPickWallpaperClick(object? sender, RoutedEventArgs e)
-    {
-        if (Vm is not { } vm) return;
-        if (TopLevel.GetTopLevel(this) is not { } top) return;
-
-        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "选择壁纸图片",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("图片")
-                {
-                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"],
-                },
-            ],
-        });
-
-        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
-        if (!string.IsNullOrEmpty(path))
-        {
-            vm.SetWallpaper(path);
-            // 选完收起浮层，让用户立刻看到效果。
-            if (sender is Button b) b.Flyout?.Hide();
-        }
-    }
-
-    private void OnClearWallpaperClick(object? sender, RoutedEventArgs e)
-    {
-        Vm?.ClearWallpaper();
-        if (sender is Button b) b.Flyout?.Hide();
     }
 }
