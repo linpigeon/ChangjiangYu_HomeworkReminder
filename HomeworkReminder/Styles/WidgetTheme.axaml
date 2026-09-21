@@ -1,0 +1,87 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    桌面小组件专用样式。
+    颜色一律用 DynamicResource 引用应用级主题资源（Todo*/Widget*），
+    随主程序浅色/深色切换实时变化；面板是半透明玻璃底
+    （WidgetPanelBackground/Border，定义在 App.axaml 的 ThemeDictionaries 里），
+    直接叠在壁纸/桌面上。
+  -->
+
+  <!-- ============ 行 ============ -->
+  <Style Selector="Border.widgetrow">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Margin" Value="0,1" />
+  </Style>
+
+  <Style Selector="Border.widgetrow:pointerover">
+    <Setter Property="Background" Value="{DynamicResource TodoRowHover}" />
+  </Style>
+
+  <Style Selector="Border.widgetrow TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextPrimary}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <!-- 逾期：红色（深浅两套色板里各自调过对比度） -->
+  <Style Selector="Border.widgetrow TextBlock.overdue">
+    <Setter Property="Foreground" Value="{DynamicResource TodoOverdue}" />
+  </Style>
+
+  <!-- 已判定完成：整行淡出 -->
+  <Style Selector="Border.widgetrow TextBlock.done">
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextTertiary}" />
+  </Style>
+
+  <!-- ============ 图标按钮 ============ -->
+  <Style Selector="Button.widgettool">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6,4" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.widgettool:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoHover}" />
+  </Style>
+
+  <!-- 同步中：图标持续旋转（用 class 而不是禁用按钮，避免悬停态卡住） -->
+  <Style Selector="Button.widgettool.syncing TextBlock">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- ============ 分组下拉框 ============ -->
+  <!-- 小组件头部要「看起来不像输入框」，所以去掉背景与边框。 -->
+  <Style Selector="ComboBox.widgetgroup">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBox.widgetgroup /template/ Border#Background">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- 分组下拉的弹出列表：菜单化——条目更高、左右内缩，悬停呈圆角药丸（Microsoft To Do 侧边栏风格）。 -->
+  <Style Selector="ComboBox.widgetgroup ComboBoxItem">
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="Margin" Value="4,1" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+
+</Styles>

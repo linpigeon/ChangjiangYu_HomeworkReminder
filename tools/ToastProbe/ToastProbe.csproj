@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    一次性探针：验证「自带 AUMID 自注册 + WinRT COM 激活」发送 toast 的可行性。
+    自带 AUMID 的思路来自 Tor.Net 的 NotificationCenter：未打包 Win32 应用把自己
+    注册进 HKCU\Software\Classes\AppUserModelId 后即可直接调用 WinRT 通知 API，
+    无需借用 PowerShell/Explorer 的 AUMID，也无需管理员权限。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HomeworkReminder.ToastProbe</RootNamespace>
+    <AssemblyName>HomeworkReminder.ToastProbe</AssemblyName>
+    <!-- 探针自身也用 WinForms 无关，仅需注册表访问，标准库足够 -->
+  </PropertyGroup>
+</Project>

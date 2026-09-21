@@ -83,6 +83,10 @@
           <TextBlock Text="{Binding SyncStatus}" FontSize="11"
                      Foreground="{DynamicResource TodoTextTertiary}"
                      TextWrapping="Wrap" />
+          <TextBlock Text="{Binding CacheNote}" FontSize="11"
+                     Foreground="{DynamicResource TodoTextTertiary}"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding CacheNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <TextBlock Text="{Binding StatusDetail}" FontSize="11"
                      Foreground="{DynamicResource TodoTextTertiary}"
                      TextWrapping="Wrap" />

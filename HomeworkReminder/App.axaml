@@ -47,6 +47,10 @@
                     <SolidColorBrush x:Key="TodoBadgeBackground" Color="#EFEFEF" />
                     <SolidColorBrush x:Key="TodoDisabled" Color="#C7C7C7" />
                     <SolidColorBrush x:Key="TodoDialogBackground" Color="#FFFFFF" />
+
+                    <!-- 桌面小组件的玻璃面板：直接叠在壁纸/桌面上，需要带 alpha 的半透明底。 -->
+                    <SolidColorBrush x:Key="WidgetPanelBackground" Color="#D8F7F6F5" />
+                    <SolidColorBrush x:Key="WidgetPanelBorder" Color="#33000000" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Dark">
@@ -77,35 +81,64 @@
                     <SolidColorBrush x:Key="TodoBadgeBackground" Color="#3D3D3D" />
                     <SolidColorBrush x:Key="TodoDisabled" Color="#4A4A4A" />
                     <SolidColorBrush x:Key="TodoDialogBackground" Color="#2B2B2B" />
+
+                    <!-- 桌面小组件的玻璃面板：直接叠在壁纸/桌面上，需要带 alpha 的半透明底。 -->
+                    <SolidColorBrush x:Key="WidgetPanelBackground" Color="#D9222222" />
+                    <SolidColorBrush x:Key="WidgetPanelBorder" Color="#33FFFFFF" />
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>
 
             <FontFamily x:Key="TodoIconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         </ResourceDictionary>
+
+        <!--
+          桌面小组件的圆形勾选框模板。
+          小组件与主界面共用 CheckBox 控件，但外观不同：主界面是空心圆环，
+          小组件是圆角小方块（更紧凑，语义也更直观）。
+          放在应用级资源里，便于 WidgetView 通过 StaticResource 引用。
+          颜色全部走 DynamicResource，随主程序浅色/深色切换。
+        -->
+        <ControlTheme x:Key="WidgetCheckBox" TargetType="CheckBox">
+          <Setter Property="Cursor" Value="Hand" />
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Name="Root" Background="Transparent" Padding="1">
+                <Grid Width="16" Height="16">
+                  <Border Name="Box" Width="16" Height="16" CornerRadius="4"
+                          BorderBrush="{DynamicResource TodoTextSecondary}" BorderThickness="1.4"
+                          Background="Transparent" />
+                  <Path Name="Tick" Data="M 4,8.4 L 6.8,11.2 L 12,5"
+                        Stroke="{DynamicResource TodoTextPrimary}" StrokeThickness="1.7"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        IsVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+          <Style Selector="^:pointerover /template/ Border#Box">
+            <Setter Property="BorderBrush" Value="{DynamicResource TodoTextPrimary}" />
+          </Style>
+          <Style Selector="^:checked /template/ Border#Box">
+            <Setter Property="Background" Value="{DynamicResource TodoRowHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource TodoTextPrimary}" />
+          </Style>
+          <Style Selector="^:checked /template/ Path#Tick">
+            <Setter Property="IsVisible" Value="True" />
+          </Style>
+        </ControlTheme>
     </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://HomeworkReminder/Styles/TodoTheme.axaml" />
+        <StyleInclude Source="avares://HomeworkReminder/Styles/WidgetTheme.axaml" />
     </Application.Styles>
 
     <!--
-      系统托盘图标：窗口「最小化运行」后唯一入口。
-      左键单击或菜单「打开主界面」都会把窗口还原到前台。
+      系统托盘：图标与菜单由桌面层（HomeworkReminder.Desktop 的 TrayIconHost）托管——
+      原生 NativeMenu 是 Win32 绘制的、改不了样式，所以托盘右键换成自绘的
+      TrayMenuWindow（见 App.axaml.cs 的 TrayIconHook / ShowTrayMenuAt）。
     -->
-    <TrayIcon.Icons>
-        <TrayIcons>
-            <TrayIcon ToolTipText="作业提醒 · 长江雨课堂"
-                      Icon="/Assets/app.ico"
-                      Clicked="OnTrayClicked">
-                <TrayIcon.Menu>
-                    <NativeMenu>
-                        <NativeMenuItem Header="打开主界面" Click="OnTrayOpenClick" />
-                        <NativeMenuItem Header="退出" Click="OnTrayQuitClick" />
-                    </NativeMenu>
-                </TrayIcon.Menu>
-            </TrayIcon>
-        </TrayIcons>
-    </TrayIcon.Icons>
 </Application>

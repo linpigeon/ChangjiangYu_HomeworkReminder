@@ -1,0 +1,69 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:HomeworkReminder.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="240"
+             x:Class="HomeworkReminder.Views.TrayMenuView">
+
+  <!--
+    自绘托盘菜单（系统原生 NativeMenu 改不了样式，所以整个右键菜单自己画）。
+    视觉参考 Win11 现代菜单：圆角面板、细描边、投影、条目内缩的悬停高亮。
+    颜色走应用级主题资源，随浅色/深色切换。
+  -->
+  <UserControl.Styles>
+    <Style Selector="Button.traymenuitem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,7" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.traymenuitem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TodoNavHover}" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- Margin 给 BoxShadow 留出绘制空间 -->
+  <Border CornerRadius="8"
+          Background="{DynamicResource TodoDialogBackground}"
+          BorderBrush="{DynamicResource TodoBorder}"
+          BorderThickness="1"
+          BoxShadow="0 8 24 0 #40000000"
+          Padding="4"
+          Margin="8">
+    <ItemsControl Name="MenuItems">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="views:TrayMenuItem">
+          <Grid>
+            <Border IsVisible="{Binding IsSeparator}"
+                    Height="1" Margin="6,4"
+                    Background="{DynamicResource TodoBorder}" />
+            <Button Classes="traymenuitem"
+                    IsVisible="{Binding !IsSeparator}"
+                    Click="OnItemClick"
+                    HorizontalAlignment="Stretch">
+              <!-- 文字整行居中；勾选标记叠在左侧，不参与文字的对齐计算。 -->
+              <Panel>
+                <TextBlock Text="{Binding Label}" FontSize="13"
+                           Foreground="{DynamicResource TodoTextPrimary}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <TextBlock Text="&#xE73E;" FontFamily="{StaticResource TodoIconFont}"
+                           FontSize="12" Foreground="{DynamicResource TodoTextPrimary}"
+                           IsVisible="{Binding IsChecked}"
+                           HorizontalAlignment="Left" VerticalAlignment="Center" />
+              </Panel>
+            </Button>
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </Border>
+</UserControl>

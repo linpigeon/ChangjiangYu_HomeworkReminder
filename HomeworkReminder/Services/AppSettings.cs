@@ -29,6 +29,41 @@ public sealed class AppSettings
     /// <summary>主题：0 = 浅色，1 = 深色，2 = 跟随系统。</summary>
     public int ThemeModeIndex { get; set; } = 2;
 
+    // ---------------- 自动同步与通知 ----------------
+
+    /// <summary>
+    /// 自动同步间隔（分钟）。<c>0</c> = 关闭自动同步。
+    /// 下限由界面与校验共同保证在 <see cref="MinRefreshMinutes"/>。
+    /// </summary>
+    public int AutoRefreshMinutes { get; set; } = 30;
+
+    /// <summary>间隔的合法下限（分钟）。太小会频繁请求雨课堂，容易被风控。</summary>
+    public const int MinRefreshMinutes = 5;
+
+    /// <summary>间隔的合法上限（分钟）。</summary>
+    public const int MaxRefreshMinutes = 24 * 60;
+
+    /// <summary>发现新作业时是否发系统通知。</summary>
+    public bool NotifyOnNewHomework { get; set; } = true;
+
+    // ---------------- 桌面小组件 ----------------
+
+    /// <summary>是否显示桌面小组件。</summary>
+    public bool WidgetVisible { get; set; }
+
+    /// <summary>小组件位置。null = 使用默认位置（主屏右下角）。</summary>
+    public int? WidgetX { get; set; }
+
+    public int? WidgetY { get; set; }
+
+    /// <summary>小组件尺寸（DIP）。null = 默认尺寸。</summary>
+    public double? WidgetW { get; set; }
+
+    public double? WidgetH { get; set; }
+
+    /// <summary>小组件当前选中的分组：myday / homework / planned / all。</summary>
+    public string WidgetGroup { get; set; } = "myday";
+
     private static readonly Lazy<AppSettings> LazyCurrent = new(Load);
 
     /// <summary>当前生效的设置。进程生命周期内缓存；修改 settings.json 需重启应用。</summary>
@@ -51,10 +86,31 @@ public sealed class AppSettings
         }
     }
 
-    /// <summary>写回磁盘（供未来的设置界面或测试使用）。</summary>
+    /// <summary>
+    /// 归一化自动同步间隔：0（关闭）保持 0，其余夹在
+    /// [<see cref="MinRefreshMinutes"/>, <see cref="MaxRefreshMinutes"/>] 之间。
+    /// 手改 settings.json 写出离谱数值时，不至于让应用疯狂请求或永不同步。
+    /// </summary>
+    public static int NormalizeRefreshMinutes(int minutes)
+    {
+        if (minutes <= 0) return 0;
+        return Math.Clamp(minutes, MinRefreshMinutes, MaxRefreshMinutes);
+    }
+
+    // UI 线程的直接保存与线程池的防抖保存会并发写同一文件，串行化写盘。
+    private static readonly object SaveLock = new();
+
+    /// <summary>写回磁盘。主题/透明度由界面防抖后调用，壁纸与小组件开关直接调用。</summary>
     public void Save()
     {
-        Directory.CreateDirectory(AppPaths.DataDirectory);
-        File.WriteAllText(Location, JsonSerializer.Serialize(this, AppJsonContext.Default.AppSettings));
+        var json = JsonSerializer.Serialize(this, AppJsonContext.Default.AppSettings);
+        lock (SaveLock)
+        {
+            Directory.CreateDirectory(AppPaths.DataDirectory);
+            // 先写临时文件再原子替换：进程中断也不会留下半截 JSON。
+            var temp = Location + ".tmp";
+            File.WriteAllText(temp, json);
+            File.Move(temp, Location, overwrite: true);
+        }
     }
 }

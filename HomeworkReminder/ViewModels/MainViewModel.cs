@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HomeworkReminder.Models;
@@ -37,6 +38,10 @@ public sealed partial class MainViewModel : ViewModelBase
 {
     private readonly ISessionStore _sessionStore;
     private readonly ILocalStateStore _localStateStore;
+    private readonly ITodoCacheStore _todoCacheStore;
+
+    /// <summary>上次同步落盘的待办缓存（todos.json 的内存副本），增量同步的比对基准。</summary>
+    private TodoCacheFile? _cacheFile;
     private readonly YktLoginService _loginService = new();
 
     /// <summary>
@@ -58,6 +63,9 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private CancellationTokenSource? _syncCts;
 
+    /// <summary>手动同步与自动同步的互斥锁：同一时刻最多一个同步在用 <see cref="_api"/>。</summary>
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
+
     /// <summary>取消正在等待的登录检测（自动检测可被「重新检测登录」打断）。</summary>
     private CancellationTokenSource? _loginCts;
 
@@ -70,6 +78,7 @@ public sealed partial class MainViewModel : ViewModelBase
     /// 界面永远停在「同步中」且列表为空。
     /// </para>
     /// </summary>
+    [ObservableProperty]
     private bool _isSyncing;
 
     /// <summary>
@@ -94,10 +103,11 @@ public sealed partial class MainViewModel : ViewModelBase
     {
     }
 
-    public MainViewModel(ISessionStore sessionStore, ILocalStateStore localStateStore)
+    public MainViewModel(ISessionStore sessionStore, ILocalStateStore localStateStore, ITodoCacheStore? todoCacheStore = null)
     {
         _sessionStore = sessionStore;
         _localStateStore = localStateStore;
+        _todoCacheStore = todoCacheStore ?? new TodoCacheStore();
 
         NavItems =
         [
@@ -119,6 +129,74 @@ public sealed partial class MainViewModel : ViewModelBase
         _wallpaperOpacityPercent = settings.WallpaperOpacityPercent;
         ApplyTheme();
         LoadWallpaper(settings.WallpaperPath);
+
+        // 自动同步：定时在后台跑同步，发现新作业时发系统通知。
+        AutoSync = new AutoSyncService(SyncForAutoAsync, Notifier);
+        if (!Notifier.IsAvailable && !string.IsNullOrEmpty(Notifier.UnavailableReason))
+        {
+            SyncStatus = $"系统通知不可用：{Notifier.UnavailableReason}";
+        }
+    }
+
+    /// <summary>
+    /// 自动同步用的同步入口：在后台线程上被 <see cref="AutoSyncService"/> 的循环调用。
+    /// 只负责把数据拉回来并落到界面；「新作业」的判定与通知由
+    /// <see cref="AutoSyncService.Observe"/> 统一负责（手动同步也走它）。
+    /// </summary>
+    private async Task<SyncResult?> SyncForAutoAsync(CancellationToken ct)
+    {
+        // 与手动同步互斥：手动同步在途时跳过本轮、等下一个间隔，
+        // 不并发跑同一个 _api。
+        if (!await _syncGate.WaitAsync(0, ct).ConfigureAwait(false)) return null;
+
+        try
+        {
+            var api = _api;
+            if (api is null) return null;
+
+            // 网络与解析放后台线程，与 RefreshAsync 保持一致。
+            var (result, localState, profile) = await Task.Run(async () =>
+            {
+                var r = await new SyncService(api).SyncAsync(_cacheFile, null, ct).ConfigureAwait(false);
+                var ls = await _localStateStore.LoadAsync(ct).ConfigureAwait(false);
+                YktUserProfile? p = null;
+                try
+                {
+                    p = await api.GetUserProfileAsync(ct).ConfigureAwait(false);
+                }
+                catch (YktAuthExpiredException) { throw; }
+                catch (YktApiException) { /* 展示信息，失败无妨 */ }
+                return (r, ls, p);
+            }, ct).ConfigureAwait(false);
+
+            ct.ThrowIfCancellationRequested();
+
+            // ApplySyncResult 必须在 UI 线程执行（清空/填充 ObservableCollection、触发 Synced）。
+            // 自动同步循环跑在线程池上、没有同步上下文可回，必须显式派发到 UI 线程。
+            await Dispatcher.UIThread.InvokeAsync(() => ApplySyncResult(result, localState, profile));
+
+            return result;
+        }
+        catch (YktAuthExpiredException)
+        {
+            // 与手动同步一致：登录态失效必须浮到界面，而不是只在循环日志里空转。
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                State = AppState.Error;
+                ErrorMessage = "登录态已失效，请重新扫码登录。";
+                LoginStatusText = "登录已过期";
+                _api?.Dispose();
+                _api = null;
+            });
+            // 停掉自动同步。不能在循环里 await StopAsync（它会等待循环自己），
+            // 火忘即可：令牌取消后循环本轮抛出、不再进入下一轮。
+            _ = AutoSync.StopAsync();
+            throw;
+        }
+        finally
+        {
+            _syncGate.Release();
+        }
     }
 
     // ---------------- 外观：壁纸与背景透明度 ----------------
@@ -300,6 +378,10 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _syncStatus = string.Empty;
 
+    /// <summary>首屏列表来自本地缓存时的提示（后台同步完成前保持显示）。</summary>
+    [ObservableProperty]
+    private string _cacheNote = string.Empty;
+
     [ObservableProperty]
     private string _statusDetail = string.Empty;
 
@@ -427,6 +509,10 @@ public sealed partial class MainViewModel : ViewModelBase
         var saved = await _sessionStore.LoadAsync().ConfigureAwait(true);
         if (saved is { HasValue: true })
         {
+            // 启动时登录页会先显示，其「后台自动检测」轮询可能已在跑；
+            // 会话既已恢复就必须停掉它，否则它会继续把「仍在等待扫码…」写进主界面状态栏。
+            _loginCts?.Cancel();
+
             _session = saved.ToSession();
             _api = new YktApiClient(_session);
             State = AppState.Syncing;
@@ -435,8 +521,37 @@ public sealed partial class MainViewModel : ViewModelBase
             // 先用上次缓存的资料把界面填上，避免首屏显示占位；同步成功后会刷新。
             ApplyCachedProfile(saved);
 
+            // 待办也先上缓存：首屏列表秒开，网络同步在后台追平。
+            // 缓存加载时已做合法性校验（坏条目在 TodoCacheStore 里被丢弃）。
+            _cacheFile = await _todoCacheStore.LoadAsync().ConfigureAwait(true);
+            if (_cacheFile is { } cache && (cache.Homework.Count > 0 || cache.Announcements.Count > 0))
+            {
+                BuildCache(new SyncResult
+                {
+                    Homework = cache.Homework,
+                    Announcements = cache.Announcements,
+                    CourseCount = cache.CourseCount,
+                    ActivityCount = cache.ActivityCount,
+                    UnreadNotificationCount = cache.UnreadNotificationCount,
+                    SyncedAt = cache.SyncedAt,
+                });
+                ApplyFilter();
+                RefreshNavState();
+                SyncStatus = $"本地缓存 · 上次同步于 {cache.SyncedAt:MM-dd HH:mm}";
+                // SyncStatus 马上会被后台同步的进度文本覆盖，缓存提示单独放一条，
+                // 在新数据到达前一直可见。
+                CacheNote = $"列表是 {cache.SyncedAt:MM-dd HH:mm} 的本地缓存，正在后台同步…";
+            }
+
             // RefreshAsync 自己负责把耗时工作挪到后台线程，这里直接等待即可。
             await RefreshAsync().ConfigureAwait(true);
+
+            // 首次同步成功才启动自动同步：失败（如登录态失效）时 _api 已置空，
+            // 不启动可避免循环每个间隔都空转报错。
+            // RefreshAsync 内部已把首次结果交给 Observe 建立基线，
+            // 不会把「首次看到的全部作业」当成新作业通知一遍。
+            if (State == AppState.Ready)
+                await AutoSync.StartAsync(AppSettings.Current.AutoRefreshMinutes).ConfigureAwait(true);
         }
         else
         {
@@ -603,7 +718,17 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private async Task<bool> AdoptSessionAsync(YktSession session)
     {
+        // 登录页可能在「后台自动检测」轮询：会话一经接管，那套轮询就是僵尸循环，
+        // 会继续把「仍在等待扫码…」写进状态栏（主界面里也看得到）。必须取消。
+        // 从 CompleteLoginAsync 自己走进来时这是「取消自己」，无害：
+        // 循环已经越过 WaitForLoginAsync，finally 的 ReferenceEquals 判断不受影响。
+        _loginCts?.Cancel();
+
         _session = session;
+
+        // 先停自动同步：它的循环可能正用着旧 _api（自动同步不走 _isSyncing，
+        // 仅靠下面的 WaitForSyncToStopAsync 等不到它）。
+        await AutoSync.StopAsync().ConfigureAwait(true);
 
         // 上一轮同步可能还在跑且正用着旧 _api：先取消并等它彻底结束再换。
         // 直接 Dispose 在途的 YktApiClient，下一个节流请求会撞上已释放的
@@ -623,18 +748,29 @@ public sealed partial class MainViewModel : ViewModelBase
         LoginStatusText = $"已登录 · sessionid …{Tail(session.SessionId)}";
         await RefreshAsync().ConfigureAwait(true);
 
+        // 登录成功即启动自动同步（与 InitializeAsync 恢复会话的路径一致），
+        // 否则本次会话收不到新作业通知；失败则保持停止，避免空转报错。
+        if (State == AppState.Ready)
+            await AutoSync.StartAsync(AppSettings.Current.AutoRefreshMinutes).ConfigureAwait(true);
+
         return State == AppState.Ready;
     }
 
-    /// <summary>取消当前同步并等它收尾完成（_isSyncing 归零），供替换/销毁 _api 前调用。</summary>
+    /// <summary>取消当前同步并等它收尾完成（手动与自动都不在途），供替换/销毁 _api 前调用。</summary>
     private async Task WaitForSyncToStopAsync()
     {
-        if (!_isSyncing) return;
-        _syncCts?.Cancel();
-        // 同步在 Task.Run 里跑、finally 回到 UI 线程收尾；这里 await 让出，
-        // 不会死锁。取消在请求间隙生效，通常 200ms 节流间隔内就会停。
-        while (_isSyncing)
-            await Task.Delay(50).ConfigureAwait(true);
+        if (IsSyncing)
+        {
+            _syncCts?.Cancel();
+            // 同步在 Task.Run 里跑、finally 回到 UI 线程收尾；这里 await 让出，
+            // 不会死锁。取消在请求间隙生效，通常 200ms 节流间隔内就会停。
+            while (IsSyncing)
+                await Task.Delay(50).ConfigureAwait(true);
+        }
+
+        // 自动同步不走 _isSyncing：拿到互斥锁才确认没有任何同步在途。
+        await _syncGate.WaitAsync().ConfigureAwait(true);
+        _syncGate.Release();
     }
 
     /// <summary>
@@ -652,6 +788,56 @@ public sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     public static Func<Avalonia.Controls.NativeWebView?>? WebViewAccessor { get; set; }
 
+    /// <summary>
+    /// 系统通知实现。由平台头在启动时注入（桌面端为 <c>WindowsNotifier</c>），
+    /// 未注入时退化为 <see cref="NullNotifier"/>，非 Windows 平台也能正常跑。
+    /// </summary>
+    public static INotifier Notifier { get; set; } = new NullNotifier();
+
+    /// <summary>自动同步与「新作业」通知。</summary>
+    public AutoSyncService AutoSync { get; }
+
+    /// <summary>
+    /// 同步后的全量事项，供桌面小组件复用。
+    /// 小组件据此渲染，不再单独请求网络，从而与主界面始终一致。
+    /// </summary>
+    public IReadOnlyList<TodoItemViewModel> WidgetSource => _cache;
+
+    /// <summary>
+    /// 同步完成（或退出登录清空数据）后触发，供小组件刷新（由桌面头订阅）。
+    /// 契约：始终在 UI 线程触发，订阅方可以直接操作窗口与控件。
+    /// </summary>
+    public event EventHandler? Synced;
+
+    /// <summary>
+    /// 用户切换了「显示桌面小组件」。由桌面头订阅并负责真正的显示/隐藏——
+    /// 共享项目不该直接操作窗口。
+    /// </summary>
+    public event EventHandler? WidgetVisibilityRequested;
+
+    /// <summary>小组件是否已启用（持久化在 settings.json）。</summary>
+    [ObservableProperty]
+    private bool _widgetEnabled = AppSettings.Current.WidgetVisible;
+
+    /// <summary>托盘菜单与界面调用：切换小组件显示。</summary>
+    public void SetWidgetEnabled(bool enabled)
+    {
+        WidgetEnabled = enabled;
+        AppSettings.Current.WidgetVisible = enabled;
+        AppSettings.Current.Save();
+        WidgetVisibilityRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 托盘「立即同步一次」的入口。菜单语义是「发起同步」，与界面按钮的
+    /// 「再点一次 = 取消」区分开：手动同步在途时直接忽略这次点击。
+    /// </summary>
+    public void RequestManualSync()
+    {
+        if (IsSyncing) return;
+        _ = RefreshCommand.ExecuteAsync(null);
+    }
+
     /// <summary>上一次退出登录时 WebView Cookie 的清理结果，便于排查「退出后仍在登录」。</summary>
     [ObservableProperty]
     private string _logoutCookieReport = string.Empty;
@@ -660,6 +846,10 @@ public sealed partial class MainViewModel : ViewModelBase
     private async Task LogoutAsync()
     {
         _loginCts?.Cancel();
+        // 先停自动同步并清掉基线：否则循环会因 _api 为 null 每个间隔空转报错，
+        // 残留的「已见」集合还会污染下一个账号的首次通知。
+        await AutoSync.StopAsync().ConfigureAwait(true);
+        AutoSync.ResetBaseline();
         // 与 AdoptSessionAsync 同理：等同步彻底停下再 Dispose _api。
         await WaitForSyncToStopAsync().ConfigureAwait(true);
         _api?.Dispose();
@@ -667,6 +857,10 @@ public sealed partial class MainViewModel : ViewModelBase
         _session = null;
         _cache.Clear();
         List.Replace([]);
+        _cacheFile = null;
+        await _todoCacheStore.ClearAsync().ConfigureAwait(true);
+        // 通知小组件刷新：数据已清空，继续展示旧账号待办会误导用户勾选写入。
+        Synced?.Invoke(this, EventArgs.Empty);
         await _sessionStore.ClearAsync().ConfigureAwait(true);
 
         // 关键：WebView 有自己的持久化 Cookie 存储，与应用会话文件是两套。
@@ -692,6 +886,7 @@ public sealed partial class MainViewModel : ViewModelBase
         UserAvatarUrl = null;
         UserAvatar = null;
         SyncStatus = "尚未同步";
+        CacheNote = string.Empty;
         StatusDetail = string.Empty;
         HasWarnings = false;
         ErrorMessage = string.Empty;
@@ -723,14 +918,14 @@ public sealed partial class MainViewModel : ViewModelBase
             return;
         }
 
-        if (_isSyncing)
+        if (IsSyncing)
         {
             // 再次触发表示「取消当前同步」。
             _syncCts?.Cancel();
             return;
         }
 
-        _isSyncing = true;
+        IsSyncing = true;
         EnterBusy();
         State = AppState.Syncing;
         ErrorMessage = string.Empty;
@@ -738,8 +933,14 @@ public sealed partial class MainViewModel : ViewModelBase
         var syncCts = _syncCts;
         var ct = syncCts.Token;
 
+        // 与自动同步互斥：它可能正占着 _api 跑网络，等它这一轮结束再开始。
+        // 等待本身可被取消（同步中再点一次按钮）。
+        var gateAcquired = false;
         try
         {
+            await _syncGate.WaitAsync(ct).ConfigureAwait(true);
+            gateAcquired = true;
+
             // Progress<T> 会捕获创建时的同步上下文，因此即使从后台线程汇报，
             // 回调仍会在 UI 线程上执行——进度文本可以安全更新。
             var progress = new Progress<string>(s => SyncStatus = s);
@@ -747,7 +948,7 @@ public sealed partial class MainViewModel : ViewModelBase
             var api = _api;
             var (result, localState, profile) = await Task.Run(async () =>
             {
-                var r = await new SyncService(api).SyncAsync(progress, ct).ConfigureAwait(false);
+                var r = await new SyncService(api).SyncAsync(_cacheFile, progress, ct).ConfigureAwait(false);
                 var ls = await _localStateStore.LoadAsync(ct).ConfigureAwait(false);
                 // 用户资料只是展示信息：单独取，失败不影响待办同步。
                 YktUserProfile? p = null;
@@ -762,31 +963,13 @@ public sealed partial class MainViewModel : ViewModelBase
 
             ct.ThrowIfCancellationRequested();
 
-            _lastResult = result;
-            _localState = localState;
-            ApplyProfile(profile);
+            ApplySyncResult(result, localState, profile);
 
-            BuildCache(result);
-            ApplyFilter();
-            // 数据到达后必须刷新导航角标：OnNavChanged 只在点击导航时触发，
-            // 首次同步完成时没有人调用它。
-            RefreshNavState();
-
-            SyncStatus = $"同步于 {result.SyncedAt:HH:mm}";
-
-            var unread = result.Announcements.Count(a => !a.IsRead);
-            ShowUnreadBadge = unread > 0;
-            UnreadBadge = unread > 99 ? "99+" : unread.ToString();
-
-            HasWarnings = result.Warnings.Count > 0;
-            WarningText = string.Join("\n", result.Warnings);
-
-            var pending = result.PendingHomework.Count();
-            StatusDetail =
-                $"{result.CourseCount} 门课程 · {result.ActivityCount} 条日志 · " +
-                $"{result.Homework.Count} 项作业（待完成 {pending}） · {result.Announcements.Count} 条公告";
-
-            State = AppState.Ready;
+            // 手动同步也要喂给「新作业」基线：否则启动后、首次自动同步之前
+            // 手动刷出的新作业会被那次同步的「首次只建基线」静默吞掉，永远收不到通知。
+            var fresh = AutoSync.Observe(result);
+            if (fresh.Count > 0 && AppSettings.Current.NotifyOnNewHomework)
+                AutoSync.Notify(fresh);
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
@@ -816,9 +999,10 @@ public sealed partial class MainViewModel : ViewModelBase
         finally
         {
             ExitBusy();
-            _isSyncing = false;
+            IsSyncing = false;
             syncCts.Dispose();
             if (ReferenceEquals(_syncCts, syncCts)) _syncCts = null;
+            if (gateAcquired) _syncGate.Release();
         }
     }
 
@@ -863,6 +1047,61 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             // 缓存写失败不影响本次运行。
         }
+    }
+
+    /// <summary>
+    /// 把一次同步的结果落到界面上。
+    /// <para>
+    /// 手动同步与自动同步共用这一段，保证两条路径的界面表现一致
+    /// （导航角标、未读徽标、警告条、统计行）。必须在 UI 线程上调用。
+    /// </para>
+    /// </summary>
+    private void ApplySyncResult(SyncResult result, LocalState localState, YktUserProfile? profile)
+    {
+        _lastResult = result;
+        _localState = localState;
+        ApplyProfile(profile);
+
+        // 落盘待办缓存：下次启动秒开列表 + 作为下次增量同步的比对基准。
+        // 注意用合并前（HomeworkForCache）的列表：合并会丢课堂归属，被并掉的课程下次无法增量复用。
+        _cacheFile = new TodoCacheFile
+        {
+            SyncedAt = result.SyncedAt,
+            Homework = result.HomeworkForCache.ToList(),
+            Announcements = result.Announcements.ToList(),
+            CourseSignatures = new Dictionary<long, string>(result.CourseSignatures),
+            CourseCount = result.CourseCount,
+            ActivityCount = result.ActivityCount,
+            UnreadNotificationCount = result.UnreadNotificationCount,
+        };
+        _ = _todoCacheStore.SaveAsync(_cacheFile);
+
+        BuildCache(result);
+        ApplyFilter();
+        // 数据到达后必须刷新导航角标：OnNavChanged 只在点击导航时触发，
+        // 首次同步完成时没有人调用它。
+        RefreshNavState();
+
+        SyncStatus = $"同步于 {result.SyncedAt:HH:mm}";
+        CacheNote = string.Empty;
+
+        var unread = result.Announcements.Count(a => !a.IsRead);
+        ShowUnreadBadge = unread > 0;
+        UnreadBadge = unread > 99 ? "99+" : unread.ToString();
+
+        HasWarnings = result.Warnings.Count > 0;
+        WarningText = string.Join("\n", result.Warnings);
+
+        var pending = result.PendingHomework.Count();
+        StatusDetail =
+            $"{result.CourseCount} 门课程 · {result.ActivityCount} 条日志 · " +
+            $"{result.Homework.Count} 项作业（待完成 {pending}） · {result.Announcements.Count} 条公告" +
+            (result.ReusedCourses > 0 ? $" · {result.ReusedCourses} 门课走增量校验" : "");
+
+        State = AppState.Ready;
+
+        // 通知小组件刷新（数据已就绪）。
+        Synced?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>把同步结果展开成扁平的 ViewModel 缓存。</summary>

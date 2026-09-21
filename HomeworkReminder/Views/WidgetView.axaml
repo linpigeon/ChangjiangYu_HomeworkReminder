@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="340" d:DesignHeight="440"
+             x:Class="HomeworkReminder.Views.WidgetView"
+             x:DataType="vm:WidgetViewModel">
+
+  <!--
+    桌面小组件内容。参考滴答清单的桌面挂件：一块半透明玻璃面板。
+    窗口本身（WidgetWindow）负责无边框 / 置顶 / 拖动，这里只画内容。
+    颜色全部走 DynamicResource，随主程序浅色/深色切换（面板底与描边是
+    专门的 WidgetPanel* 资源，文字/悬停复用主界面的 Todo* 语义画刷）。
+  -->
+  <Border Name="RootPanel"
+          CornerRadius="12"
+          Background="{DynamicResource WidgetPanelBackground}"
+          BorderBrush="{DynamicResource WidgetPanelBorder}"
+          BorderThickness="1"
+          PointerPressed="OnPanelPressed">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <!-- ============ 头部：分组切换 + 按钮 ============ -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="14,10,8,4">
+        <ComboBox Grid.Column="0"
+                  Classes="widgetgroup"
+                  ItemsSource="{Binding Groups}"
+                  SelectedItem="{Binding SelectedGroup}"
+                  MinHeight="0"
+                  FontSize="15"
+                  Foreground="{DynamicResource TodoTextPrimary}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:WidgetGroup">
+              <!-- 图标 + 文字、左对齐：与主界面侧边栏（Microsoft To Do 风格）一致。
+                   不写死前景色：头部继承 ComboBox 前景，下拉项继承主题前景。 -->
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="{Binding Icon}" FontFamily="{StaticResource TodoIconFont}"
+                           FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Label}" FontSize="14" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+          <!-- 不做 IsEnabled 禁用：指针悬停时禁用会让 :pointerover 灰底卡住清不掉
+               （禁用后控件收不到指针移出事件）。同步中改用旋转动画表达，
+               重复点击由 RequestManualSync 自己忽略。 -->
+          <Button Classes="widgettool" Classes.syncing="{Binding IsSyncing}"
+                  Click="OnSyncClick"
+                  ToolTip.Tip="立即同步">
+            <TextBlock Text="&#xE72C;" FontFamily="{StaticResource TodoIconFont}"
+                       FontSize="13" Foreground="{DynamicResource TodoTextSecondary}"
+                       RenderTransform="rotate(0)"
+                       RenderTransformOrigin="50%,50%" />
+          </Button>
+          <Button Classes="widgettool" Click="OnOpenMainClick"
+                  ToolTip.Tip="打开主界面">
+            <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource TodoIconFont}"
+                       FontSize="13" Foreground="{DynamicResource TodoTextSecondary}" />
+          </Button>
+          <Button Classes="widgettool" Click="OnCloseClick"
+                  ToolTip.Tip="关闭小组件">
+            <TextBlock Text="&#xE711;" FontFamily="{StaticResource TodoIconFont}"
+                       FontSize="12" Foreground="{DynamicResource TodoTextSecondary}" />
+          </Button>
+        </StackPanel>
+      </Grid>
+
+      <!-- ============ 待办列表 ============ -->
+      <ScrollViewer Grid.Row="1"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="6,0,6,4">
+
+          <ItemsControl ItemsSource="{Binding Items}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TodoItemViewModel">
+                <Border Classes="widgetrow"
+                        Classes.done="{Binding IsDone}"
+                        PointerPressed="OnRowPressed"
+                        DoubleTapped="OnRowDoubleTapped">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <CheckBox Grid.Column="0"
+                              Theme="{StaticResource WidgetCheckBox}"
+                              IsChecked="{Binding IsDone, Mode=OneWay}"
+                              Click="OnCheckboxClick"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="在应用内标记为已处理" />
+
+                    <StackPanel Grid.Column="1" Margin="9,0,2,0" Spacing="1">
+                      <TextBlock Text="{Binding Title}" FontSize="13"
+                                 Classes.done="{Binding IsDone}" />
+                      <TextBlock Text="{Binding DueText}" FontSize="11"
+                                 Classes.overdue="{Binding IsOverdue}"
+                                 Foreground="{DynamicResource TodoTextSecondary}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- 空状态 -->
+          <TextBlock Text="{Binding EmptyText}"
+                     FontSize="12" Foreground="{DynamicResource TodoTextSecondary}"
+                     HorizontalAlignment="Center" Margin="0,30"
+                     IsVisible="{Binding !Items.Count}" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- ============ 底部：同步进度（同步中才显示） + 条目数 ============ -->
+      <Border Grid.Row="2" BorderBrush="{DynamicResource WidgetPanelBorder}" BorderThickness="0,1,0,0">
+        <Grid ColumnDefinitions="*,Auto" Margin="12,2,10,2">
+          <TextBlock Grid.Column="0" Text="{Binding SyncStatus}"
+                     FontSize="11" Foreground="{DynamicResource TodoTextSecondary}"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     IsVisible="{Binding IsSyncing}" />
+
+          <TextBlock Grid.Column="1" Text="{Binding Items.Count, StringFormat='{}{0} 项'}"
+                     FontSize="11" Foreground="{DynamicResource TodoTextTertiary}" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

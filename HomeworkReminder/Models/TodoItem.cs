@@ -25,15 +25,16 @@ public sealed class TodoItem
     /// <summary>发布时间（北京时间）。</summary>
     public DateTimeOffset? PublishedAt { get; init; }
 
-    public TodoStatus Status { get; init; } = TodoStatus.Unknown;
+    // 增量同步会在「签名未变」的课程上就地把完成状态刷新为最新校验结果，因此是可写的。
+    public TodoStatus Status { get; set; } = TodoStatus.Unknown;
 
     /// <summary>已完成题数。</summary>
-    public int? Done { get; init; }
+    public int? Done { get; set; }
 
     /// <summary>总题数。0 表示题目尚未组卷（此时 done/total 显示为 0/0）。</summary>
-    public int? Total { get; init; }
+    public int? Total { get; set; }
 
-    public double? Score { get; init; }
+    public double? Score { get; set; }
 
     /// <summary>雨课堂站内的原始链接，便于跳回原页面。</summary>
     public string? SourceUrl { get; init; }

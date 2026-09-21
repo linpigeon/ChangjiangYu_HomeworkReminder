@@ -39,17 +39,58 @@ public partial class App : Application
 
     // ---------------- 系统托盘 ----------------
 
+    /// <summary>
+    /// 桌面平台注入的托盘宿主工厂（Windows 上是 <c>TrayIconHost</c>：左键还原主窗口、
+    /// 右键弹自绘菜单）。为 null 则没有托盘——只影响测试/特殊模式。
+    /// 用委托是因为共享项目不能反向引用桌面项目。
+    /// </summary>
+    public static Func<IDisposable>? TrayIconHook { get; set; }
+
+    private IDisposable? _trayIcon;
+    private TrayMenuWindow? _trayMenu;
+
     private static MainWindow? MainWindow =>
         (Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)
         ?.MainWindow as MainWindow;
 
-    /// <summary>托盘左键单击：还原主窗口。</summary>
-    private void OnTrayClicked(object? sender, System.EventArgs e) => MainWindow?.ShowFromTray();
+    /// <summary>托盘左键 / 菜单「打开主界面」：还原主窗口。</summary>
+    public void ShowMainWindow() => MainWindow?.ShowFromTray();
 
-    private void OnTrayOpenClick(object? sender, System.EventArgs e) => MainWindow?.ShowFromTray();
+    /// <summary>在指定屏幕位置弹出自绘托盘菜单。重复弹出时先关掉旧的。</summary>
+    public void ShowTrayMenuAt(PixelPoint cursor)
+    {
+        _trayMenu?.Close();
+        if (ViewModel is not { } vm) return;
 
-    /// <summary>托盘「退出」：跳过关闭确认，真正结束进程。</summary>
-    private void OnTrayQuitClick(object? sender, System.EventArgs e) => MainWindow?.QuitForReal();
+        var settings = Services.AppSettings.Current;
+        var items = new TrayMenuItem[]
+        {
+            new("打开主界面", ShowMainWindow),
+            TrayMenuItem.CreateSeparator(),
+            new("显示桌面小组件", () => vm.SetWidgetEnabled(!settings.WidgetVisible),
+                isChecked: settings.WidgetVisible),
+            new("立即同步一次", vm.RequestManualSync),
+            TrayMenuItem.CreateSeparator(),
+            new("退出", QuitFromTray),
+        };
+
+        var menu = new TrayMenuWindow(items, cursor);
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_trayMenu, menu)) _trayMenu = null;
+        };
+        _trayMenu = menu;
+        menu.Show();
+        menu.Activate();
+    }
+
+    /// <summary>托盘「退出」：停自动同步，真正结束进程。</summary>
+    private void QuitFromTray()
+    {
+        // 停掉自动同步并等它在途循环收尾，避免强杀后台线程留下半截写入。
+        ViewModel?.AutoSync.Dispose();
+        MainWindow?.QuitForReal();
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -70,6 +111,17 @@ public partial class App : Application
             }
 
             desktop.MainWindow = new MainWindow { DataContext = ViewModel };
+
+            // 托盘图标由桌面层注入（Windows：自绘菜单）；自检等模式不创建。
+            if (!DeferInitialLoad)
+                _trayIcon = TrayIconHook?.Invoke();
+
+            // 进程退出（关窗/系统注销等不走托盘「退出」的路径）也要停掉自动同步。
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                ViewModel?.AutoSync.Dispose();
+                _trayIcon?.Dispose();
+            };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {

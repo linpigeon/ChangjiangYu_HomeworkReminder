@@ -42,6 +42,12 @@ sealed class Program
             ? args[selfCheckIndex + 1]
             : null;
 
+        // --selfcheck-widget [png]：渲染桌面小组件并做绑定自检。
+        var widgetCheckIndex = Array.IndexOf(args, "--selfcheck-widget");
+        var widgetRenderPath = widgetCheckIndex >= 0 && args.Length > widgetCheckIndex + 1
+            ? args[widgetCheckIndex + 1]
+            : null;
+
         // --selfcheck-login [png]：强制停在登录页后自检渲染，用于查看登录界面布局。
         var loginCheckIndex = Array.IndexOf(args, "--selfcheck-login");
         var loginRenderPath = loginCheckIndex >= 0 && args.Length > loginCheckIndex + 1
@@ -78,6 +84,14 @@ sealed class Program
             e.SetObserved();
         };
 
+        // --toastcheck：只验证通知链路（AUMID 注册、快捷方式、toast XML、WinRT 投递），
+        //   然后退出。不依赖登录，可在无账号环境下诊断「为什么没弹通知」。
+        //   故意放在异常兜底与启动日志初始化之后：自检工具自身抛异常时也能落 startup.log。
+        if (args.Contains("--toastcheck"))
+        {
+            Environment.Exit(ToastCheck.Run());
+        }
+
         if (webTestIndex >= 0)
         {
             var seconds = webTestIndex + 1 < args.Length && int.TryParse(args[webTestIndex + 1], out var s) ? s : 30;
@@ -103,6 +117,12 @@ sealed class Program
             return;
         }
 
+        if (widgetCheckIndex >= 0)
+        {
+            RunWidgetSelfCheck(widgetRenderPath);
+            return;
+        }
+
         if (loginCheckIndex >= 0)
         {
             RunSelfCheck(loginRenderPath);
@@ -114,6 +134,18 @@ sealed class Program
             RunSelfCheck(renderPath);
             return;
         }
+
+        // 系统通知：构造时自注册 AUMID 并补开始菜单快捷方式（写注册表 + 开始菜单）。
+        // 只在正常运行模式下做——--jsoncheck/--selfcheck 等纯自检不该改用户系统状态。
+        // 注册失败也不影响主流程——ViewModel 会把它显示成「系统通知不可用：原因」。
+        // 平台守卫让分析器满意，也表达「仅 Windows 有系统通知」这一事实。
+        ViewModels.MainViewModel.Notifier = OperatingSystem.IsWindows()
+            ? new WindowsNotifier()
+            : new NullNotifier();
+
+        // 托盘：Windows 上用自绘菜单的托盘宿主（原生 NativeMenu 无法改样式）。
+        if (OperatingSystem.IsWindows())
+            App.TrayIconHook = TrayIconHost.Attach;
 
         try
         {
@@ -260,6 +292,45 @@ sealed class Program
         };
 
         window.Show();
+    }
+
+    /// <summary>
+    /// 桌面小组件自检：构造 <see cref="WidgetWindow"/>、跑布局与绑定检查，
+    /// 可选离屏渲染成 PNG（小组件是深色半透明面板，靠肉眼确认可读性最直接）。
+    /// </summary>
+    private static void RunWidgetSelfCheck(string? renderPath)
+    {
+        App.DeferInitialLoad = true;
+
+        var builder = BuildAvaloniaApp();
+        builder.SetupWithoutStarting();
+
+        var app = (App)Application.Current!;
+        var vm = app.ViewModel ?? throw new InvalidOperationException("App did not create a view model");
+
+        var initTask = Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            try
+            {
+                await vm.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"数据初始化失败（继续做界面自检）：{ex.Message}");
+            }
+        });
+        PumpUntil(initTask, TimeSpan.FromMinutes(4));
+
+        // 不显示窗口，只渲染内容：小组件窗口是无边框置顶窗口，
+        // 在自检环境里显示它反而会干扰。
+        var widget = new Views.WidgetWindow(vm);
+
+        // 默认分组「我的一天」在无当日到期项时是空的，渲染出来只有空状态。
+        // 切到「所有」才能同时检查列表行、勾选框、逾期着色的真实表现。
+        widget.SelectGroupForCheck("all");
+
+        var code = SelfCheck.Run(widget, renderPath);
+        Environment.Exit(code);
     }
 
     private static void RunSelfCheck(string? renderPath)

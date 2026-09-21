@@ -25,6 +25,12 @@
 
 * **学期可配置**：编辑数据目录下的 `settings.json` 即可切换学期与学校，不用改代码
 
+* **定时自动同步**：默认每 30 分钟同步一次作业列表，间隔可在 `settings.json` 调整（`0` = 关闭）
+
+* **新作业通知**：发现新作业时发 Windows 系统通知，点击直达该课程的雨课堂页面
+
+* **桌面小组件**：仿滴答清单的桌面挂件，半透明玻璃面板、可拖动、可缩放，位置与尺寸自动记忆，浅色/深色跟随主程序
+
 ## 快速开始
 
 双击运行 `HomeworkReminder.Desktop.exe`，首次启动会显示登录页：
@@ -34,6 +40,51 @@
    F12 → Network 复制任意 `v2/api/web` 请求的 `cookie` 请求头粘贴进去。
 
 登录成功后自动同步，之后每次启动都会刷新作业列表。
+
+## 自动同步与通知
+
+默认每 **30 分钟**自动同步一次。**首次同步只建立基线**，不会把已有作业全报一遍；
+之后每次同步只对**新增**作业发通知。判定用稳定 Id 而非标题，改标题不会误报。
+
+相关设置（`settings.json`，与 `session.json` 同目录，改完重启生效）：
+
+| 字段                      | 默认    | 说明                                              |
+| ----------------------- | ----- | ----------------------------------------------- |
+| `AutoRefreshMinutes`    | `30`  | 自动同步间隔（分钟）。`0` = 关闭；低于 5 会被夹到 5，避免频繁请求被风控      |
+| `NotifyOnNewHomework`   | `true` | 是否发系统通知                                        |
+| `WidgetVisible`         | `false` | 是否显示桌面小组件                                      |
+| `WidgetX` / `WidgetY`   | —     | 小组件位置，拖动后自动写入                                  |
+| `WidgetGroup`           | `myday` | 小组件当前分组（myday / homework / planned / all）      |
+
+### 通知链路自检
+
+通知涉及注册表、开始菜单快捷方式与 WinRT 三层，出问题时不易定位，因此单独留了自检：
+
+```powershell
+.\HomeworkReminder.Desktop.exe --toastcheck
+```
+
+逐项报告：AUMID 注册 → 开始菜单快捷方式 → toast XML 生成与转义 → WinRT 投递（失败给 HRESULT）。
+
+> **实现说明**：未打包（unpackaged）的 Win32 应用发 toast 需要三个条件，缺一不可：
+> ① 注册 `HKCU\Software\Classes\AppUserModelId\<aumid>`；
+> ② 在开始菜单放一个带 `System.AppUserModel.ID` 属性的快捷方式
+> ——实测**只做 ① 不够**，`CreateToastNotifier` 会返回 `0x80070490`（找不到元素）；
+> ③ 走 WinRT `ToastNotificationManager`。
+> 三处写入都在 HKCU 与用户自己的开始菜单目录，**不需要管理员权限**。
+> 本仓库的离线包源没有任何通知相关 NuGet 包，这一层是手写的 COM 互操作
+> （`Services/WinRtToast.cs`），与 `Dpapi` 同一取舍。
+
+## 桌面小组件
+
+从**托盘菜单 → 显示桌面小组件**开启，再点一次关闭。
+
+* 无边框、透明、普通窗口层级（不置顶；从托盘/主界面召唤时会到最前），左键拖动移动位置、拖边缘/角落调整大小（停下即记忆）
+* 直接复用主界面已同步的数据，**不额外请求网络**，与主界面始终一致
+* 双击条目在浏览器打开；点勾选框在应用内标记
+* 只显示「雨课堂未完成 **且** 应用内未勾掉」的事项，与主界面口径一致
+
+![桌面小组件](docs/screenshots/widget.png)
 
 ## 数据存放
 
@@ -61,6 +112,8 @@
 ```powershell
 .\HomeworkReminder.Desktop.exe --selfcheck out.png   # 窗口/绑定自检 + 离屏渲染
 .\HomeworkReminder.Desktop.exe --jsoncheck           # 序列化路径自检（裁剪版必过项）
+.\HomeworkReminder.Desktop.exe --toastcheck          # 通知链路自检
+.\HomeworkReminder.Desktop.exe --selfcheck-widget w.png  # 小组件渲染自检
 ```
 
 两者退出码为 0 即表示产物健康。
@@ -76,8 +129,12 @@ HomeworkReminder/                 共享项目：模型、服务、视图、View
     SessionStore.cs               登录态持久化（DPAPI 加密）
     AppJsonContext.cs             源生成 JSON 序列化上下文
     YktLoginService.cs            WebView 扫码登录
+    AutoSyncService.cs            定时同步 + 新作业判定（可脱离 UI 测试）
+    Notifier.cs / WinRtToast.cs   系统通知抽象与 WinRT COM 互操作
   Views/                          MainWindow / TodoShellView / LoginView
+                                  WidgetView + WidgetWindow（桌面小组件）
   Styles/TodoTheme.axaml          仿 To Do 的 Fluent 控件样式（含深色主题）
+  Styles/WidgetTheme.axaml        桌面小组件的深色半透明样式
 HomeworkReminder.Desktop/         桌面宿主（启动、托盘、自检入口）
 tools/                            构建、发布、冒烟测试脚本
 docs/                             接口实测文档与调研记录

@@ -5,6 +5,10 @@
     See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- 桌面头是 Windows 专用的（WinRT toast、DPAPI、ShellLink 都是 Windows API）。
+         在这里声明一次，平台分析器就不会为每个调用点报 CA1416；
+         共享项目里需要跨平台的部分仍各自用 OperatingSystem.IsWindows() 守卫。 -->
+    <SupportedOSPlatform>windows</SupportedOSPlatform>
   </PropertyGroup>
 
   <PropertyGroup>

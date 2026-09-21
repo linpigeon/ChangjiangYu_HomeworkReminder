@@ -33,6 +33,11 @@ if (session.IsExpired)
 
 using var api = new YktApiClient(session);
 
+// 带上 todos.json 缓存走增量：签名未变的课程会跳过章节树与逐条详情（只校验完成进度）。
+var cacheStore = new TodoCacheStore(dataDir);
+var cache = await cacheStore.LoadAsync();
+Console.WriteLine($"待办缓存 : {(cache is null ? "（无，本次全量）" : $"{cache.Homework.Count} 项作业 · 上次同步于 {cache.SyncedAt:MM-dd HH:mm}")}");
+
 Console.WriteLine();
 Console.WriteLine("=== 开始同步 ===");
 var progress = new Progress<string>(s => Console.WriteLine($"  · {s}"));
@@ -40,7 +45,7 @@ var progress = new Progress<string>(s => Console.WriteLine($"  · {s}"));
 SyncResult result;
 try
 {
-    result = await new SyncService(api).SyncAsync(progress);
+    result = await new SyncService(api).SyncAsync(cache, progress);
 }
 catch (YktAuthExpiredException)
 {
@@ -57,7 +62,20 @@ Console.WriteLine();
 Console.WriteLine("=== 结果 ===");
 Console.WriteLine($"课程 {result.CourseCount} 门 · 学习日志 {result.ActivityCount} 条 · " +
                   $"作业 {result.Homework.Count} 项 · 公告 {result.Announcements.Count} 条 · " +
-                  $"通知中心未读 {result.UnreadNotificationCount}");
+                  $"通知中心未读 {result.UnreadNotificationCount}" +
+                  (result.ReusedCourses > 0 ? $" · 增量校验 {result.ReusedCourses} 门" : ""));
+
+// 与应用一致：同步结果落盘为下次的增量基准（注意用合并前的列表，保留课堂归属）。
+await cacheStore.SaveAsync(new TodoCacheFile
+{
+    SyncedAt = result.SyncedAt,
+    Homework = result.HomeworkForCache.ToList(),
+    Announcements = result.Announcements.ToList(),
+    CourseSignatures = new Dictionary<long, string>(result.CourseSignatures),
+    CourseCount = result.CourseCount,
+    ActivityCount = result.ActivityCount,
+    UnreadNotificationCount = result.UnreadNotificationCount,
+});
 
 var pending = result.PendingHomework.OrderBy(h => h.DueAt ?? DateTimeOffset.MaxValue).ToList();
 Console.WriteLine();
