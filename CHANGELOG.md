@@ -2,17 +2,39 @@
 
 ## v1.2.0（2026-09-22）
 
-本版不新增功能，修的是**发布件与源码脱节**的问题：`v1.1.1` 的两个产物都构建于
-该版本的提交之前，桌面端尤其严重。本版两个平台均从 `HEAD` 重新构建。
+> **本版合并并取代 v1.1.1**：`v1.1.1` 的 tag 与 release 均已废止，其全部内容并入本版。
+> 代码层面 v1.1.1 本就是 HEAD 的祖先，无需合并提交；合并的是发布记录，目的是消除
+> 「CHANGELOG 声称已发布、实际产物却没有」的不一致。
+
+### 新增
+
+- **Android 端可用**（API 23+）：登录 / 同步 / 待办列表全链路验证通过；
+  登录页自动切换为账号登录（手机号/短信/邮箱，手机扫不了自己屏幕上的二维码），
+  Cookie 读取走原生 CookieManager 钩子
+- **侧边栏可收起 + 手机抽屉式导航**：宽屏三栏不变；窄屏（<700 DIP，手机竖屏）自动切换为
+  「列表全屏 + 覆盖式抽屉」（点 ☰ 展开、选导航/点遮罩收起），点选事项进入
+  全屏详情二级页（左上角返回）
+- **平台外壳按工程分离**：桌面外壳 `TodoShellView`（共享项目，三栏）与
+  Android 外壳 `MobileShellView`（Android 工程，抽屉式）共用同一 MainViewModel；
+  侧边栏/列表/详情抽取为共用部件（SidebarView/TodoListView/TodoDetailView），
+  样式不分叉
+- **图标字体改为内嵌 Font Awesome 6 Free**（CC BY 4.0）：Segoe 系是 Windows 系统字体，
+  Android 上显示为方框；现在全平台同一套图标
 
 ### 修复
 
-- **桌面端 `v1.1.1` 发布件滞后源码 5 个提交**（构建于 `8d6306d`）。缺失内容包括
-  窄屏抽屉式导航与详情二级页、侧边栏收起、抽屉浮层不透明底 —— 即 CHANGELOG v1.1.1
-  声称已发布的那些界面改动，实际并未进入分发件。本版补齐
-- **Android 端 `v1.1.1` 发布件滞后 1 个提交**（构建于 `f9f4a12`），缺 `d8c8aff`
-  的「外壳按平台分离」。本版补齐
-- 触摸滚动误触修复（`f9f4a12`）此前只在 Android 包里生效，桌面端缺失；本版两端均包含
+- **桌面端产物滞后源码 5 个提交**（原 v1.1.1 分发件构建于 `8d6306d`）。窄屏抽屉式导航与
+  详情二级页、侧边栏收起、抽屉浮层不透明底均未进入分发件 —— 即 v1.1.1 声称已发布、
+  实际却没有的部分。本版两端均从 `HEAD` 重新构建
+- **Android 端产物滞后 1 个提交**（原 v1.1.1 分发件构建于 `f9f4a12`），缺「外壳按平台分离」
+- **触摸滚动误触**：列表/导航选中由 `PointerPressed` 改为 `Tapped`。滚动手势以按下开始，
+  按下即选中会在滑动途中误选事项（窄屏下还连带弹出详情页）；`Tapped` 只在抬起且未发生
+  滚动时触发，`ScrollViewer` 的捕获会抑制它。此前该修复只在 Android 包中生效
+- Android 用户资料不显示（「未登录」无头像）：`/api/v3/*` 在雨课堂 Envoy 网关后，
+  对 .NET Android 默认的 Java 原生 HTTP 栈一律 UNAUTHENTICATED；
+  HTTP 栈改为一律使用托管 SocketsHttpHandler（与桌面一致），
+  资料端点主用 `/v/course_meta/user_info`（信息更全），v3 兜底
+- Android Debug 包直接安装闪退（快速部署的 APK 不含程序集）：Release 构建正常
 
 ### 发布产物
 
@@ -42,31 +64,6 @@
   命名管道 IPC 会被拒绝并报 `MSB4216`，需在正常桌面会话中构建
 - Android 构建需要 JDK 21（新版本 JDK 会触发 `XA0033`：版本号无法解析）与
   Android SDK；两者可用 `-p:JavaSdkDirectory=` / `-p:AndroidSdkDirectory=` 指定
-
-## v1.1.1（2026-09-21）
-
-### 新增
-
-- **Android 端可用**（API 23+）：登录 / 同步 / 待办列表全链路验证通过；
-  登录页自动切换为账号登录（手机号/短信/邮箱，手机扫不了自己屏幕上的二维码），
-  Cookie 读取走原生 CookieManager 钩子
-- **侧边栏可收起 + 手机抽屉式导航**：宽屏三栏不变；窄屏（<700 DIP，手机竖屏）自动切换为
-  「列表全屏 + 覆盖式抽屉」（点 ☰ 展开、选导航/点遮罩收起），点选事项进入
-  全屏详情二级页（左上角返回）
-- **平台外壳按工程分离**：桌面外壳 `TodoShellView`（共享项目，三栏）与
-  Android 外壳 `MobileShellView`（Android 工程，抽屉式）共用同一 MainViewModel；
-  侧边栏/列表/详情抽取为共用部件（SidebarView/TodoListView/TodoDetailView），
-  样式不分叉
-- **图标字体改为内嵌 Font Awesome 6 Free**（CC BY 4.0）：Segoe 系是 Windows 系统字体，
-  Android 上显示为方框；现在全平台同一套图标
-
-### 修复
-
-- Android 用户资料不显示（「未登录」无头像）：`/api/v3/*` 在雨课堂 Envoy 网关后，
-  对 .NET Android 默认的 Java 原生 HTTP 栈一律 UNAUTHENTICATED；
-  HTTP 栈改为一律使用托管 SocketsHttpHandler（与桌面一致），
-  资料端点主用 `/v/course_meta/user_info`（信息更全），v3 兜底
-- Android Debug 包直接安装闪退（快速部署的 APK 不含程序集）：Release 构建正常
 
 ## v1.1.0（2026-09-21）
 
