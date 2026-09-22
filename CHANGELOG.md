@@ -1,5 +1,32 @@
 # 发布日志
 
+## v1.2.0（2026-09-22）
+
+本版不新增功能，是**发布验证版**：源码与 `v1.1.1` 相同，本次重新走通构建与
+发布流程并核对产物。
+
+### 发布产物
+
+| 产物 | 大小 |
+|---|---|
+| `HomeworkReminder-v1.2.0-win-x64.zip`（内含单个 `HomeworkReminder.Desktop.exe`） | 17.05 MB（exe 41.16 MB）|
+| `HomeworkReminder-v1.2.0-android.apk` | 45.07 MB |
+
+### 验证
+
+- Android APK 与 `HomeworkReminder.Android\bin\Release\net10.0-android\com.CompanyName.HomeworkReminder-Signed.apk`
+  **逐字节一致**（SHA256 前缀 `656A9105EE0006D5`），确认发布件即 Release 构建输出
+- 桌面单文件 exe 与上一版分发件一致（单条目 zip 布局未变）
+
+### 已确认未包含在本次产物中
+
+以下改动在 `v1.1.1` 之后合入源码，但**现有产物构建于其之前**，需重新构建才会生效：
+
+- `f9f4a12` 修复触摸滚动误触：列表/导航选中由 `PointerPressed` 改为 `Tapped`。
+  滚动手势以按下开始，按下即选中会在滑动途中误选事项（窄屏下还连带弹出详情页）；
+  `Tapped` 只在抬起且未发生滚动时触发，`ScrollViewer` 的捕获会抑制它
+- `d8c8aff` 外壳按平台分离（已在 `v1.1.1` 条目记录）
+
 ## v1.1.1（2026-09-21）
 
 ### 新增
