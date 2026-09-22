@@ -74,7 +74,7 @@ public partial class TodoShellView : UserControl
         }
     }
 
-    private void OnRowPressed(object? sender, PointerPressedEventArgs e)
+    private void OnRowTapped(object? sender, TappedEventArgs e)
     {
         if (Vm is not { } vm) return;
         if (sender is not Border { DataContext: TodoItemViewModel item }) return;

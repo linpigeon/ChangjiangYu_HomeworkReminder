@@ -17,7 +17,7 @@ public partial class SidebarView : UserControl
 
     private MainViewModel? Vm => DataContext as MainViewModel;
 
-    private void OnNavPressed(object? sender, PointerPressedEventArgs e)
+    private void OnNavTapped(object? sender, TappedEventArgs e)
     {
         if (Vm is not { } vm) return;
         if (sender is not Border { DataContext: NavItem nav }) return;

@@ -56,7 +56,7 @@
             <DataTemplate x:DataType="vm:NavItem">
               <Border Name="NavRow" Classes="navrow"
                       Classes.selected="{Binding IsSelected}"
-                      PointerPressed="OnNavPressed"
+                      Tapped="OnNavTapped"
                       Margin="0,1">
                 <Grid ColumnDefinitions="Auto,*,Auto" Margin="10,8">
                   <TextBlock Grid.Column="0" Classes="icon" Text="{Binding Glyph}"

@@ -80,7 +80,7 @@
                         Classes.selected="{Binding IsSelected}"
                         Classes.serverdone="{Binding IsCompletedOnServer}"
                         Classes.localdone="{Binding IsDone}"
-                        PointerPressed="OnRowPressed">
+                        Tapped="OnRowTapped">
                   <Grid ColumnDefinitions="Auto,*,Auto">
 
                     <!-- 圆形勾选（本地） -->
