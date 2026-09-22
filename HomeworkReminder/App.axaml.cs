@@ -27,6 +27,13 @@ public partial class App : Application
     public static bool ForceLoginPage { get; set; }
 
     /// <summary>
+    /// 移动端外壳工厂：Android 头在启动时注入（返回 MobileShellView，抽屉式布局）。
+    /// null = 使用共享项目里的桌面三栏 TodoShellView。
+    /// 用委托是因为共享项目不能反向引用头部工程（与 WebViewTestHook 同一模式）。
+    /// </summary>
+    public static Func<Avalonia.Controls.Control>? MobileShellFactory { get; set; }
+
+    /// <summary>
     /// WebView 链路测试的窗口构建钩子。
     /// 用委托是因为共享项目不能反向引用桌面项目（Desktop 引用了共享项目）。
     /// </summary>

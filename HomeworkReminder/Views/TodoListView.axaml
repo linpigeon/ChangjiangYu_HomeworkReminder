@@ -1,0 +1,150 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="700"
+             x:Class="HomeworkReminder.Views.TodoListView"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    待办列表（桌面三栏的中栏与移动端全屏列表共用）。
+    DrawerMode=true 时（移动端宿主设置）头部按钮切抽屉；否则切宽屏的侧边栏收起。
+  -->
+  <Border Background="{Binding ListBrush}"
+          BorderBrush="{DynamicResource TodoBorder}" BorderThickness="0,0,1,0">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+      <!-- 列表头 -->
+      <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="14,16,14,6">
+        <Button Grid.Column="0" Classes="tool" Click="OnToggleSidebarClick"
+                VerticalAlignment="Top"
+                ToolTip.Tip="收起/展开侧边栏">
+          <TextBlock Classes="icon" Text="&#xF0C9;" />
+        </Button>
+        <StackPanel Grid.Column="1" Spacing="2" Margin="10,0,0,0">
+          <TextBlock Classes="sectionHeader" Text="{Binding ListTitle}" />
+          <TextBlock Classes="faint" Text="{Binding ListSubtitle}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
+          <Button Classes="tool" Click="OnMarkAllReadClick"
+                  IsVisible="{Binding ShowUnreadBadge}"
+                  ToolTip.Tip="把公告全部标记为已读（雨课堂只提供「全部已读」接口）">
+            <TextBlock Classes="icon" Text="&#xF560;" />
+          </Button>
+          <Button Classes="tool" Click="OnOpenSourceClick"
+                  IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                  ToolTip.Tip="在浏览器中打开该课程在雨课堂的日志页（作业与公告都在这里）">
+            <TextBlock Classes="icon" Text="&#xF35D;" />
+          </Button>
+        </StackPanel>
+      </Grid>
+
+      <!-- 提示条 -->
+      <StackPanel Grid.Row="1" Spacing="6" Margin="18,0,14,6">
+        <Border IsVisible="{Binding HasWarnings}"
+                Background="{DynamicResource TodoWarningBackground}"
+                BorderBrush="{DynamicResource TodoWarningBorder}" BorderThickness="1"
+                CornerRadius="4" Padding="10,8">
+          <StackPanel Spacing="2">
+            <TextBlock Text="部分数据未能读取" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TodoTextPrimary}" />
+            <TextBlock Text="{Binding WarningText}" FontSize="11"
+                       Foreground="{DynamicResource TodoTextSecondary}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <CheckBox Classes="todo" Content="隐藏已勾选" FontSize="11"
+                  Foreground="{DynamicResource TodoTextSecondary}"
+                  IsChecked="{Binding List.HideLocallyDone}"
+                  IsVisible="{Binding ShowHideDoneToggle}" />
+      </StackPanel>
+
+      <!-- 列表。空列表时整块折叠，否则「隐藏已勾选」的复选框会以未初始化状态
+           渲染在空状态文案旁边，看起来像个孤立的对勾。 -->
+      <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled"
+                    IsVisible="{Binding List.HasItems}">
+        <ItemsControl ItemsSource="{Binding List.VisibleItems}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TodoItemViewModel">
+              <Border Classes="row"
+                      Classes.selected="{Binding IsSelected}"
+                      Classes.serverdone="{Binding IsCompletedOnServer}"
+                      Classes.localdone="{Binding IsDone}"
+                      Tapped="OnRowTapped">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+
+                  <!-- 圆形勾选（本地） -->
+                  <CheckBox Grid.Column="0" Classes="todocircle"
+                            IsChecked="{Binding IsDone, Mode=OneWay}"
+                            Click="OnCheckboxClick"
+                            VerticalAlignment="Top" Margin="0,1,0,0"
+                            ToolTip.Tip="在应用内标记（不改变雨课堂的完成状态）" />
+
+                  <!-- 主体 -->
+                  <StackPanel Grid.Column="1" Margin="10,0,8,0" Spacing="3">
+                    <TextBlock Classes="title" Text="{Binding Title}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <!-- 显式宽度才会触发 TextTrimming：只给 MaxWidth 时
+                           文本会被硬裁切（"通信2" 这种断尾）。 -->
+                      <TextBlock Classes="faint" Text="{Binding CourseName}"
+                                 Width="200" />
+                      <TextBlock Classes="overdue" Text="{Binding StatusText}"
+                                 IsVisible="{Binding IsCompletedOnServer}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Classes="meta" Text="{Binding DueText}" />
+                      <!-- 雨课堂已判定完成的作业不该再显示「已过期」：
+                           剩余时间只对未完成的事项有意义。 -->
+                      <TextBlock Classes="faint" Text="·"
+                                 IsVisible="{Binding ShowRemaining}" />
+                      <TextBlock Classes="meta" Text="{Binding RemainingText}"
+                                 IsVisible="{Binding ShowRemainingNotOverdue}" />
+                      <TextBlock Classes="overdue" Text="{Binding RemainingText}"
+                                 IsVisible="{Binding ShowRemainingOverdue}" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <!-- 右侧徽标：进度 / 已过期 / 真实完成状态 -->
+                  <StackPanel Grid.Column="2" Spacing="4" VerticalAlignment="Top">
+                    <Border Classes="badge progress" IsVisible="{Binding ShowProgress}">
+                      <TextBlock Text="{Binding ProgressText}" />
+                    </Border>
+                    <Border Classes="badge warn"
+                            IsVisible="{Binding IsOverdue}">
+                      <TextBlock Text="已过期" />
+                    </Border>
+                    <Border Classes="badge"
+                            IsVisible="{Binding IsCompletedOnServer}">
+                      <TextBlock Text="雨课堂已完成" />
+                    </Border>
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- 空状态 -->
+      <TextBlock Grid.Row="2" Classes="faint"
+                 Text="{Binding List.EmptyMessage}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Margin="24"
+                 IsVisible="{Binding !List.HasItems}" />
+
+      <!-- 忙碌条 -->
+      <Border Grid.Row="3" IsVisible="{Binding IsBusy}"
+              Background="{DynamicResource TodoAccentSoft}" Padding="14,8">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="icon" Text="&#xF021;" FontSize="13"
+                     Foreground="{DynamicResource TodoAccent}" />
+          <TextBlock Text="{Binding SyncStatus}" FontSize="12"
+                     Foreground="{DynamicResource TodoAccent}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:views="using:HomeworkReminder.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="760"
+             x:Class="HomeworkReminder.Android.Views.MobileShellView"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    Android 外壳：抽屉式移动布局。
+    列表全屏；☰ 展开覆盖式抽屉（遮罩 + 不透明面板）；点选事项进全屏详情二级页。
+    与桌面外壳（共享项目的 TodoShellView）共用同一 MainViewModel 与全部内容部件
+    （SidebarView / TodoListView / TodoDetailView），只在外壳组合方式上不同。
+  -->
+  <Grid>
+    <!-- 全屏待办列表（DrawerMode=true：头部按钮切抽屉） -->
+    <views:TodoListView DrawerMode="True" />
+
+    <!-- 详情二级页：选中事项后全屏覆盖，左上角返回。
+         背景必须不透明：SurfaceBrush 为壁纸效果带透明度，浮层会透出列表。 -->
+    <Border Background="{DynamicResource TodoDialogBackground}"
+            IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid RowDefinitions="Auto,*">
+        <Button Grid.Row="0" Classes="tool" Click="OnDetailBackClick"
+                Margin="10,10,0,0" HorizontalAlignment="Left"
+                ToolTip.Tip="返回列表">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Classes="icon" Text="&#xF060;" />
+            <TextBlock Text="返回" FontSize="13" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TodoTextSecondary}" />
+          </StackPanel>
+        </Button>
+        <views:TodoDetailView Grid.Row="1" />
+      </Grid>
+    </Border>
+
+    <!-- 抽屉遮罩（点遮罩收起） -->
+    <Border Background="#66000000"
+            IsVisible="{Binding DrawerOpen}"
+            PointerPressed="OnDrawerScrimPressed" />
+
+    <!-- 覆盖式抽屉（不透明底，侧边栏画刷带透明度，叠底后不透出列表） -->
+    <Border IsVisible="{Binding DrawerOpen}"
+            HorizontalAlignment="Left" Width="300"
+            Background="{DynamicResource TodoDialogBackground}"
+            BoxShadow="4 0 24 0 #40000000">
+      <views:SidebarView />
+    </Border>
+  </Grid>
+</UserControl>

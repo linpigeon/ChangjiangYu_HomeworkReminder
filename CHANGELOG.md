@@ -9,7 +9,11 @@
   Cookie 读取走原生 CookieManager 钩子
 - **侧边栏可收起 + 手机抽屉式导航**：宽屏三栏不变；窄屏（<700 DIP，手机竖屏）自动切换为
   「列表全屏 + 覆盖式抽屉」（点 ☰ 展开、选导航/点遮罩收起），点选事项进入
-  全屏详情二级页（左上角返回）；侧边栏与详情抽取为共用 UserControl，样式不分叉
+  全屏详情二级页（左上角返回）
+- **平台外壳按工程分离**：桌面外壳 `TodoShellView`（共享项目，三栏）与
+  Android 外壳 `MobileShellView`（Android 工程，抽屉式）共用同一 MainViewModel；
+  侧边栏/列表/详情抽取为共用部件（SidebarView/TodoListView/TodoDetailView），
+  样式不分叉
 - **图标字体改为内嵌 Font Awesome 6 Free**（CC BY 4.0）：Segoe 系是 Windows 系统字体，
   Android 上显示为方框；现在全平台同一套图标
 

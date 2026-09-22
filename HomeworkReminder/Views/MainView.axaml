@@ -8,11 +8,12 @@
              x:Class="HomeworkReminder.Views.MainView"
              x:DataType="vm:MainViewModel">
   <!--
-    Browser / 单视图平台的根视图。桌面端用的是 MainWindow，
-    这里保持同样的内容结构，让 ViewLocator 在两个宿主下都能工作。
+    Browser / 单视图 / 移动端平台的根视图。桌面端用的是 MainWindow。
+    内容外壳由平台决定：默认 TodoShellView（桌面三栏）；移动端头部工程
+    （Android）通过 App.MobileShellFactory 注入 MobileShellView（抽屉式）。
   -->
   <Panel>
-    <views:TodoShellView IsVisible="{Binding ShowContent}" />
+    <ContentControl Name="ShellHost" IsVisible="{Binding ShowContent}" />
     <views:LoginView IsVisible="{Binding ShowLogin}" />
   </Panel>
 </UserControl>
