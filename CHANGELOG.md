@@ -2,30 +2,46 @@
 
 ## v1.2.0（2026-09-22）
 
-本版不新增功能，是**发布验证版**：源码与 `v1.1.1` 相同，本次重新走通构建与
-发布流程并核对产物。
+本版不新增功能，修的是**发布件与源码脱节**的问题：`v1.1.1` 的两个产物都构建于
+该版本的提交之前，桌面端尤其严重。本版两个平台均从 `HEAD` 重新构建。
+
+### 修复
+
+- **桌面端 `v1.1.1` 发布件滞后源码 5 个提交**（构建于 `8d6306d`）。缺失内容包括
+  窄屏抽屉式导航与详情二级页、侧边栏收起、抽屉浮层不透明底 —— 即 CHANGELOG v1.1.1
+  声称已发布的那些界面改动，实际并未进入分发件。本版补齐
+- **Android 端 `v1.1.1` 发布件滞后 1 个提交**（构建于 `f9f4a12`），缺 `d8c8aff`
+  的「外壳按平台分离」。本版补齐
+- 触摸滚动误触修复（`f9f4a12`）此前只在 Android 包里生效，桌面端缺失；本版两端均包含
 
 ### 发布产物
 
-| 产物 | 大小 |
-|---|---|
-| `HomeworkReminder-v1.2.0-win-x64.zip`（内含单个 `HomeworkReminder.Desktop.exe`） | 17.05 MB（exe 41.16 MB）|
-| `HomeworkReminder-v1.2.0-android.apk` | 45.07 MB |
+| 产物 | 大小 | SHA256（前 16 位）|
+|---|---|---|
+| `HomeworkReminder-v1.2.0-win-x64.zip`（内含单个 `HomeworkReminder.Desktop.exe`，41.16 MB） | 17.05 MB | `11DA030C8996AA60` |
+| `HomeworkReminder-v1.2.0-android.apk` | 45.07 MB | `1E8A2DCF6A05C91F` |
 
 ### 验证
 
-- Android APK 与 `HomeworkReminder.Android\bin\Release\net10.0-android\com.CompanyName.HomeworkReminder-Signed.apk`
-  **逐字节一致**（SHA256 前缀 `656A9105EE0006D5`），确认发布件即 Release 构建输出
-- 桌面单文件 exe 与上一版分发件一致（单条目 zip 布局未变）
+两个产物均核对**编译期内嵌的源码提交戳**（`AssemblyInformationalVersion` 的 `+<sha>`），
+确认与构建时的 `HEAD` 一致，而非仅看文件时间：
 
-### 已确认未包含在本次产物中
+- 桌面 exe：`1.0.0+0800777…`
+- APK 内 `HomeworkReminder.dll`：`1.0.0+0800777…`
+- 桌面 exe 含 `OnNavTapped`、不含 `OnNavPressed`；APK 含 `MobileShellFactory` 与
+  `OnRowTapped` —— 即上述修复确实已进入产物
+- APK 签名校验通过（v1 / v2 / v3 scheme）
 
-以下改动在 `v1.1.1` 之后合入源码，但**现有产物构建于其之前**，需重新构建才会生效：
+### 说明
 
-- `f9f4a12` 修复触摸滚动误触：列表/导航选中由 `PointerPressed` 改为 `Tapped`。
-  滚动手势以按下开始，按下即选中会在滑动途中误选事项（窄屏下还连带弹出详情页）；
-  `Tapped` 只在抬起且未发生滚动时触发，`ScrollViewer` 的捕获会抑制它
-- `d8c8aff` 外壳按平台分离（已在 `v1.1.1` 条目记录）
+- Android 包使用 **Android Debug 证书**签名（`CN=Android Debug`）。仓库未配置
+  Release keystore，`ApplicationDisplayVersion` 也仍是模板默认的 `1.0`。
+  若后续切换为正式签名，已装旧包的用户需先卸载才能覆盖安装
+- 桌面端环境提示：裁剪发布依赖 ILLink，其 `ComputeManagedAssemblies` 任务硬编码
+  `TaskFactory="TaskHostFactory"`，必须起进程外任务宿主。在受限（沙箱）环境中该
+  命名管道 IPC 会被拒绝并报 `MSB4216`，需在正常桌面会话中构建
+- Android 构建需要 JDK 21（新版本 JDK 会触发 `XA0033`：版本号无法解析）与
+  Android SDK；两者可用 `-p:JavaSdkDirectory=` / `-p:AndroidSdkDirectory=` 指定
 
 ## v1.1.1（2026-09-21）
 
