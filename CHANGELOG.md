@@ -54,9 +54,10 @@ v1.1.0 及更早仅有桌面端。
 确认与构建时的 `HEAD` 一致，而非仅看文件时间：
 
 - 桌面 exe：`1.0.0+0800777…`
-- APK 内 `HomeworkReminder.dll`：`1.0.0+0800777…`
-- 桌面 exe 含 `OnNavTapped`、不含 `OnNavPressed`；APK 含 `MobileShellFactory` 与
-  `OnRowTapped` —— 即上述修复确实已进入产物
+- APK：`libassembly-store.so` 元数据内含同一源码戳，且含
+  `HomeworkReminder.Android.Views.MobileShell`（外壳分离确实进入产物；
+  注：APK 为 AOT 编译，托管成员名已剥离，不能以方法名字符串核验）
+- 桌面 exe 含 `OnNavTapped`、不含 `OnNavPressed` —— 滚动误触修复确实已进入产物
 - APK 签名校验通过（v1 / v2 / v3 scheme）
 
 ### 说明
