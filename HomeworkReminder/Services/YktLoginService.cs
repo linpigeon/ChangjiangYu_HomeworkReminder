@@ -241,8 +241,9 @@ public sealed class YktLoginService
     /// <summary>清除 WebView 内雨课堂域 Cookie 的结果。</summary>
     public sealed record CookieClearResult(int Found, int Remaining, int Deleted, string? Error)
     {
-        /// <summary>雨课堂域的 Cookie 是否已全部清除。</summary>
-        public bool Ok => Remaining == 0;
+        /// <summary>雨课堂域的 Cookie 是否已全部清除。有错误就不算成功（issue #1：
+        /// CookieManager 不可用时会返回 Remaining=0 + Error，单看 Remaining 会误报成功）。</summary>
+        public bool Ok => Remaining == 0 && Error is null;
     }
 
     /// <summary>

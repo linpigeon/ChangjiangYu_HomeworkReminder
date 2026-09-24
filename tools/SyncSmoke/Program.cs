@@ -72,6 +72,7 @@ await cacheStore.SaveAsync(new TodoCacheFile
     Homework = result.HomeworkForCache.ToList(),
     Announcements = result.Announcements.ToList(),
     CourseSignatures = new Dictionary<long, string>(result.CourseSignatures),
+    CourseFullSyncedAt = new Dictionary<long, DateTimeOffset>(result.CourseFullSyncedAt),
     CourseCount = result.CourseCount,
     ActivityCount = result.ActivityCount,
     UnreadNotificationCount = result.UnreadNotificationCount,

@@ -66,7 +66,10 @@ public sealed partial class TodoListViewModel : ViewModelBase
     public void Rebuild()
     {
         var query = Items.AsEnumerable();
-        if (HideLocallyDone) query = query.Where(i => !i.IsDone);
+        // 「隐藏已勾选」只作用于作业：公告标记已读后从列表消失、公告页又没有
+        // 关闭过滤的开关，会让人误以为公告丢了（issue #1）。
+        if (HideLocallyDone)
+            query = query.Where(i => i.Kind != TodoKind.Homework || !i.IsDone);
 
         VisibleItems.Clear();
         foreach (var i in query) VisibleItems.Add(i);

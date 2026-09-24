@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HomeworkReminder.Models;
 
@@ -275,6 +277,91 @@ public static class JsonSelfTest
             Assert(afterReset.Count == 0, "重置基线后首次同步不应报新作业");
         });
 
+        // ---- issue #1（w3743 报告）的 5 项修复回归：离线假 API，不触网 ----
+
+        Check("issue#1 跨课同名同截止作业不误合并", () =>
+        {
+            var api = new FakeYktApi(
+                [Course(100, "课程A"), Course(200, "课程B")],
+                new Dictionary<long, List<YktActivity>>
+                {
+                    [100] = [HwActivity(1, 1001, "第一次作业")],
+                    [200] = [HwActivity(2, 2002, "第一次作业")],
+                });
+            var r = new SyncService(api).SyncAsync(null).GetAwaiter().GetResult();
+            Assert(r.Homework.Count == 2, $"同名同截止作业被误合并：{r.Homework.Count} 项");
+            Assert(r.Homework.Select(h => h.ClassroomId).Distinct().Count() == 2, "误合并丢了一个课堂");
+        });
+
+        Check("issue#1 同课重复日志仍去重", () =>
+        {
+            var api = new FakeYktApi(
+                [Course(100, "课程A")],
+                new Dictionary<long, List<YktActivity>>
+                {
+                    [100] = [HwActivity(1, 1001, "作业"), HwActivity(2, 1001, "作业")],
+                });
+            var r = new SyncService(api).SyncAsync(null).GetAwaiter().GetResult();
+            Assert(r.Homework.Count == 1, $"同一作业的稳定 Id 应去重，实际 {r.Homework.Count} 项");
+        });
+
+        Check("issue#1 全量校验时间戳不被增量刷新", () =>
+        {
+            var api = new FakeYktApi(
+                [Course(100, "课程A")],
+                new Dictionary<long, List<YktActivity>> { [100] = [HwActivity(1, 1001, "作业")] });
+            var svc = new SyncService(api);
+
+            var r1 = svc.SyncAsync(null).GetAwaiter().GetResult();
+            Assert(r1.ReusedCourses == 0 && r1.CourseFullSyncedAt.ContainsKey(100), "首次同步应走全量并记录时间戳");
+
+            var cache = CacheOf(r1);
+            var r2 = svc.SyncAsync(cache).GetAwaiter().GetResult();
+            Assert(r2.ReusedCourses == 1, "缓存命中应走增量");
+            Assert(r2.CourseFullSyncedAt[100] == r1.CourseFullSyncedAt[100],
+                "增量路径不得刷新全量校验时间戳");
+
+            // 超龄（>24h）→ 该课自动全量校验
+            cache.CourseFullSyncedAt[100] = DateTimeOffset.Now - TimeSpan.FromHours(25);
+            var r3 = svc.SyncAsync(cache).GetAwaiter().GetResult();
+            Assert(r3.ReusedCourses == 0, "超龄缓存应触发全量校验");
+            Assert(r3.CourseFullSyncedAt[100] > r1.CourseFullSyncedAt[100], "全量路径应刷新时间戳");
+
+            // 旧缓存没有时间戳字段 → 同样全量
+            var legacy = CacheOf(r1);
+            legacy.CourseFullSyncedAt = [];
+            var r4 = svc.SyncAsync(legacy).GetAwaiter().GetResult();
+            Assert(r4.ReusedCourses == 0, "缺全量时间戳的旧缓存应触发全量校验");
+        });
+
+        Check("issue#1 已读公告不被默认过滤", () =>
+        {
+            var list = new ViewModels.TodoListViewModel();
+            var doneHw = new ViewModels.TodoItemViewModel(new TodoItem
+            {
+                Id = "hw-1-1", Kind = TodoKind.Homework, Title = "作业", Status = TodoStatus.NotStarted,
+            }) { IsDone = true };
+            var readAnn = new ViewModels.TodoItemViewModel(new TodoItem
+            {
+                Id = "ann-1-1", Kind = TodoKind.Announcement, Title = "公告", Status = TodoStatus.Unknown,
+            }) { IsDone = true };
+            list.Replace([doneHw, readAnn]);
+
+            Assert(list.VisibleItems.Count == 1
+                   && list.VisibleItems[0].Model.Kind == TodoKind.Announcement,
+                "已读公告被「隐藏已勾选」过滤掉了");
+            list.HideLocallyDone = false;
+            Assert(list.VisibleItems.Count == 2, "关闭过滤后应全部可见");
+        });
+
+        Check("issue#1 Cookie 清理判定", () =>
+        {
+            Assert(new YktLoginService.CookieClearResult(0, 0, 0, null).Ok, "干净清除应判定成功");
+            Assert(!new YktLoginService.CookieClearResult(0, 0, 0, "CookieManager 不可用").Ok,
+                "带错误的 Remaining=0 不得判定成功");
+            Assert(!new YktLoginService.CookieClearResult(1, 1, 0, null).Ok, "有残留不得判定成功");
+        });
+
         await Task.CompletedTask.ConfigureAwait(false);
 
         Console.WriteLine();
@@ -331,4 +418,68 @@ public static class JsonSelfTest
     {
         Homework = items.Select(i => Todo(i.Id, i.Title)).ToList(),
     };
+
+    // ---- issue#1 回归用的假 API ----
+
+    private static YktCourse Course(long classroomId, string name) => new()
+    {
+        ClassroomId = classroomId,
+        Name = name,
+        Term = 202601,
+    };
+
+    /// <summary>type=19（章节作业）的日志条；leaf_id / score_d 走真实 DTO 反序列化。</summary>
+    private static YktActivity HwActivity(long id, long leafId, string title)
+        => JsonSerializer.Deserialize(
+            """{"id":$ID$,"type":19,"title":"$TITLE$","create_time":"1758000000000","content":{"leaf_id":$LEAF$,"score_d":1790000000000} }"""
+                .Replace("$ID$", id.ToString(CultureInfo.InvariantCulture))
+                .Replace("$TITLE$", title)
+                .Replace("$LEAF$", leafId.ToString(CultureInfo.InvariantCulture)),
+            AppJsonContext.Default.YktActivity)!;
+
+    private static TodoCacheFile CacheOf(SyncResult r) => new()
+    {
+        SyncedAt = r.SyncedAt,
+        Homework = r.HomeworkForCache.ToList(),
+        Announcements = r.Announcements.ToList(),
+        CourseSignatures = new Dictionary<long, string>(r.CourseSignatures),
+        CourseFullSyncedAt = new Dictionary<long, DateTimeOffset>(r.CourseFullSyncedAt),
+    };
+
+    /// <summary>离线的 IYktApi：固定课程表 + 固定学习日志，进度/章节/详情为空。</summary>
+    private sealed class FakeYktApi(
+        IReadOnlyList<YktCourse> courses,
+        Dictionary<long, List<YktActivity>> logs) : IYktApi
+    {
+        public YktSession Session { get; } = new()
+        {
+            SessionId = "fake",
+            UniversityId = 1,
+            Term = 202601,
+        };
+
+        public Task<IReadOnlyList<YktCourse>> GetCoursesAsync(CancellationToken ct = default)
+            => Task.FromResult(courses);
+
+        public Task<IReadOnlyList<YktActivity>> GetLearnLogsAsync(long classroomId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<YktActivity>>(logs.GetValueOrDefault(classroomId, []));
+
+        public Task<IReadOnlyDictionary<string, YktLeafProgress>> GetProgressAsync(long classroomId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<string, YktLeafProgress>>(new Dictionary<string, YktLeafProgress>());
+
+        public Task<YktLeafDetail?> GetLeafDetailAsync(long classroomId, long leafId, CancellationToken ct = default)
+            => Task.FromResult<YktLeafDetail?>(null);
+
+        public Task<IReadOnlyList<YktChapter>> GetChaptersAsync(long classroomId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<YktChapter>>([]);
+
+        public Task<int> GetUnreadCountAsync(CancellationToken ct = default) => Task.FromResult(0);
+
+        public Task<YktUserProfile?> GetUserProfileAsync(CancellationToken ct = default)
+            => Task.FromResult<YktUserProfile?>(null);
+
+        public Task<bool> MarkAllReadAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+        public void Dispose() { }
+    }
 }

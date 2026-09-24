@@ -28,6 +28,12 @@ public sealed class TodoCacheFile
     /// <summary>每门课（classroomId）上次同步时的作业日志签名，用于增量比对。</summary>
     public Dictionary<long, string> CourseSignatures { get; set; } = [];
 
+    /// <summary>
+    /// 每门课最近一次全量校验（章节树+逐条详情）的时间。只在全量路径刷新；
+    /// 缺该字段的旧缓存在下次同步时自动全量校验。
+    /// </summary>
+    public Dictionary<long, DateTimeOffset> CourseFullSyncedAt { get; set; } = [];
+
     public int CourseCount { get; set; }
 
     public int ActivityCount { get; set; }

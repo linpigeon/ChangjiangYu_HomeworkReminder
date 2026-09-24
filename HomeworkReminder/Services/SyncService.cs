@@ -31,6 +31,13 @@ public sealed class SyncResult
         new Dictionary<long, string>();
 
     /// <summary>
+    /// 每门课最近一次走全量路径（章节树+逐条详情）的时间。增量路径不刷新它——
+    /// 否则每次同步都刷新 SyncedAt，24 小时全量校验永远不会触发（issue #1）。
+    /// </summary>
+    public IReadOnlyDictionary<long, DateTimeOffset> CourseFullSyncedAt { get; init; } =
+        new Dictionary<long, DateTimeOffset>();
+
+    /// <summary>
     /// 去重合并前的作业列表（每项保留自己的 ClassroomId），供落盘缓存。
     /// 合并会丢课堂归属，被并掉的课程下次就无法增量复用，所以缓存必须用合并前的。
     /// </summary>
@@ -85,10 +92,11 @@ public sealed class SyncService(IYktApi api) : ISyncService
             return new SyncResult { CourseCount = 0, Warnings = warnings, CourseSignatures = signatures };
         }
 
-        // 缓存太旧就不走增量：周期性全量是对「日志不动的变更」的兜底校验。
-        var reusable = previous is not null
-            && previous.SyncedAt > DateTimeOffset.Now - FullRevalidateAfter
-            ? previous : null;
+        // 全量校验时间戳从上次缓存继承：只有走全量路径的课程才刷新它；
+        // 缓存里缺某门课的时间戳（旧缓存）→ 该课自动走全量校验。
+        var fullSyncedAt = previous?.CourseFullSyncedAt is { } prev
+            ? new Dictionary<long, DateTimeOffset>(prev)
+            : new Dictionary<long, DateTimeOffset>();
 
         var homework = new List<TodoItem>();
         var announcements = new List<TodoItem>();
@@ -147,13 +155,16 @@ public sealed class SyncService(IYktApi api) : ISyncService
 
             if (homeworkActivities.Count == 0) continue;
 
-            // 增量捷径：签名未变且缓存里有这门课的作业 → 跳过章节树与逐条详情
-            // （请求数的大头），只拉一次完成进度校验已有项目的状态（可能别的设备上做了）。
-            if (reusable is not null
-                && reusable.CourseSignatures.TryGetValue(course.ClassroomId, out var oldSignature)
-                && oldSignature == signatures[course.ClassroomId])
+            // 增量捷径：签名未变、缓存里有这门课的作业、且距上次全量校验未超时 →
+            // 跳过章节树与逐条详情（请求数的大头），只拉一次完成进度校验已有项目的状态。
+            // 缺全量时间戳（旧缓存）或超时（默认 24h）都自动落回全量路径（issue #1）。
+            if (previous is not null
+                && previous.CourseSignatures.TryGetValue(course.ClassroomId, out var oldSignature)
+                && oldSignature == signatures[course.ClassroomId]
+                && fullSyncedAt.TryGetValue(course.ClassroomId, out var lastFull)
+                && lastFull > DateTimeOffset.Now - FullRevalidateAfter)
             {
-                var cached = reusable.Homework
+                var cached = previous.Homework
                     .Where(h => h.ClassroomId == course.ClassroomId)
                     .ToList();
                 if (cached.Count > 0)
@@ -266,6 +277,10 @@ public sealed class SyncService(IYktApi api) : ISyncService
                     SourceUrl = YktUrls.CourseLog(course.ClassroomId, api.Session.UniversityId),
                 });
             }
+
+            // 这门课走了全量路径（章节树 + 逐条详情）：记录时间戳。
+            // 增量路径不触碰它，24h 全量校验才真的会周期触发。
+            fullSyncedAt[course.ClassroomId] = DateTimeOffset.Now;
         }
 
         // 未读总数仅用于展示角标，失败不影响主流程。
@@ -283,9 +298,11 @@ public sealed class SyncService(IYktApi api) : ISyncService
             warnings.Add($"未读总数读取失败：{ex.Message}");
         }
 
-        // 同一条作业可能同时出现在多个班级课堂里，按「标题 + 截止时间」去重，保留最紧急的状态。
+        // 去重只按含课堂身份的稳定 Id：同一课堂对同一作业的重复日志会合并，
+        // 但不推测跨课堂等价关系——不同课堂里同名同截止时间的作业是各自独立的
+        // 作答记录，按「标题+截止时间」误合并会丢掉其中一门课的进度（issue #1）。
         var merged = homework
-            .GroupBy(h => $"{h.Title}@{h.DueAt:yyyyMMddHHmm}")
+            .GroupBy(h => h.Id)
             .Select(g => g
                 .OrderBy(x => x.Status == TodoStatus.Completed ? 1 : 0)
                 .ThenBy(x => x.CourseName.Length)
@@ -306,6 +323,7 @@ public sealed class SyncService(IYktApi api) : ISyncService
             UnreadNotificationCount = unread,
             Warnings = warnings,
             CourseSignatures = signatures,
+            CourseFullSyncedAt = fullSyncedAt,
             ReusedCourses = reusedCourses,
         };
     }

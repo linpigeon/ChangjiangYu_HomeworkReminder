@@ -989,6 +989,11 @@ public sealed partial class MainViewModel : ViewModelBase
             var fresh = AutoSync.Observe(result);
             if (fresh.Count > 0 && AppSettings.Current.NotifyOnNewHomework)
                 AutoSync.Notify(fresh);
+
+            // 启动时同步失败（如断网）不会启动定时同步；手动重试成功后在这里补上
+            // （issue #1）。StartAsync 幂等于重启——只在没在跑时才调用，间隔 0 时内部自停。
+            if (!AutoSync.IsRunning)
+                await AutoSync.StartAsync(AppSettings.Current.AutoRefreshMinutes).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
@@ -1089,6 +1094,7 @@ public sealed partial class MainViewModel : ViewModelBase
             Homework = result.HomeworkForCache.ToList(),
             Announcements = result.Announcements.ToList(),
             CourseSignatures = new Dictionary<long, string>(result.CourseSignatures),
+            CourseFullSyncedAt = new Dictionary<long, DateTimeOffset>(result.CourseFullSyncedAt),
             CourseCount = result.CourseCount,
             ActivityCount = result.ActivityCount,
             UnreadNotificationCount = result.UnreadNotificationCount,
