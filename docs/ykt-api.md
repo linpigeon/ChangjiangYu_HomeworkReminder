@@ -341,11 +341,14 @@ https://changjiang.yuketang.cn/v2/web/studentLog/{room}?university_id=3214&platf
 - **单条公告**：`/noticeView/{room}/{noticeid}` 需要 `noticeid`。学习日志里 type=9 的 `id`
   与通知中心的 `notify_id` 不是同一体系，没有实测确认该传哪个，因此当前实现不起用深链，
   统一回落到课程日志页。
-- **作业深链**：`/exam/:cid/:eid` 的 `eid` 应传日志 id 还是试卷 id 未确认；
-  `/exercise/:classroomId/:leafId/:skuId` 还需要 `sku_id`。
-  因此当前实现也统一回落到课程日志页——作业就在该页的「未完成」页签下。
-  这些 id 都已在响应里（`activity.id`、`leaf_id`、`content.sku_id`），
-  要启用深链只需确认真实页面 URL 后调整 `Services/YktUrls.cs`。
+- **作业深链（2026-09-28 已验证，见 `YktUrls.cs`）**：
+  - 试卷类（type=5）：`/exam/{cid}/{courseware_id}`——`eid` 是日志的 `courseware_id`
+    （字符串形态），用户实测 `/v2/web/exam/26109213/2144775` 直达答题页；
+  - 章节作业（type=19）：`/exercise/{cid}/{content.leaf_type_id}/{content.sku_id}`——
+    路由参数名实为 `exercise_id`，用 `get_exercise_detail/{id}/` 逐一试出只有
+    `leaf_type_id` 有数据（章节树节点 id 与 `courseware_id` 均 Permission Denied）。
+  - 注意：日志 `content.leaf_id` 与章节树节点 `id` 是**两个体系**；完成进度与
+    `leaf_info` 用后者，exercise 深链用前者（leaf_type_id）。
 
 ---
 
