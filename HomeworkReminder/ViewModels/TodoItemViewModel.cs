@@ -37,6 +37,10 @@ public partial class TodoItemViewModel(TodoItem model) : ViewModelBase
     /// <summary>展示用标题：剥离学期前缀（「2026秋-」「26-27-1学期 」等）。</summary>
     public string DisplayTitle => DisplayText.StripTermPrefix(Model.Title);
 
+    /// <summary>展示用学科名：优先 courses/list 内嵌 course.name（如「概率论与数理统计B」），
+    /// 旧缓存没有时退回剥离学期前缀的班级名。</summary>
+    public string DisplaySubject => Model.Subject ?? DisplayText.StripTermPrefix(Model.CourseName);
+
     /// <summary>展示用课程名：剥离学期前缀。</summary>
     public string CourseDisplayName => DisplayText.StripTermPrefix(Model.CourseName);
 

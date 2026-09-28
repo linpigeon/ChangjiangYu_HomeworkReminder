@@ -81,9 +81,9 @@
                             VerticalAlignment="Top" Margin="0,1,0,0"
                             ToolTip.Tip="在应用内标记（不改变雨课堂的完成状态）" />
 
-                  <!-- 主体：主标题课程名、副标题作业/考试标题（学期前缀已剥离） -->
+                  <!-- 主体：主标题学科名、副标题作业/考试标题（学期前缀已剥离） -->
                   <StackPanel Grid.Column="1" Margin="10,0,8,0" Spacing="3">
-                    <TextBlock Classes="title" Text="{Binding CourseDisplayName}" />
+                    <TextBlock Classes="title" Text="{Binding DisplaySubject}" />
 
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <!-- 显式宽度才会触发 TextTrimming：只给 MaxWidth 时

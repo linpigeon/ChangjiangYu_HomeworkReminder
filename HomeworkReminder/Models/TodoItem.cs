@@ -17,6 +17,9 @@ public sealed class TodoItem
     /// <summary>课程名（雨课堂的 classroom name，可能含多个班级）。</summary>
     public string CourseName { get; init; } = string.Empty;
 
+    /// <summary>学科名（courses/list 内嵌 course.name，如「概率论与数理统计B」）。旧缓存没有时为空。</summary>
+    public string? Subject { get; set; }
+
     public long ClassroomId { get; init; }
 
     /// <summary>截止时间（北京时间）。null 表示无期限——接口确实会返回空串。</summary>

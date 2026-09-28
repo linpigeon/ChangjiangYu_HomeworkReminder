@@ -135,6 +135,7 @@ public sealed class SyncService(IYktApi api) : ISyncService
                     Kind = TodoKind.Announcement,
                     Title = act.Title,
                     CourseName = course.Name,
+                    Subject = course.Course?.Name,
                     ClassroomId = course.ClassroomId,
                     PublishedAt = FromUnixMs(act.CreateTime.OrZero),
                     Status = TodoStatus.Unknown,
@@ -169,6 +170,10 @@ public sealed class SyncService(IYktApi api) : ISyncService
                     .ToList();
                 if (cached.Count > 0)
                 {
+                    // 旧缓存没有 Subject 字段，按本次课程信息回填（零额外请求）。
+                    foreach (var item in cached)
+                        item.Subject ??= course.Course?.Name;
+
                     // 缓存项的链接按本次新日志重建：深链规则是后加的，旧缓存里还是课程页。
                     // 日志是每次同步必拉的，这里零额外请求。按归一化标题配对——
                     // 稳定 Id 的尾段是章节树 id，与日志 id 不同族，按 id 配对会漏。
@@ -275,6 +280,7 @@ public sealed class SyncService(IYktApi api) : ISyncService
                     Kind = TodoKind.Homework,
                     Title = act.Title,
                     CourseName = course.Name,
+                    Subject = course.Course?.Name,
                     ClassroomId = course.ClassroomId,
                     DueAt = FromUnixMs(deadlineMs),
                     PublishedAt = published,
