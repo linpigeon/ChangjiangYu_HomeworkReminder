@@ -28,10 +28,10 @@
                   x:DataType="vm:TodoItemViewModel">
 
         <StackPanel Spacing="6">
-          <TextBlock Text="{Binding Title}" FontSize="19" FontWeight="SemiBold"
+          <TextBlock Text="{Binding CourseDisplayName}" FontSize="19" FontWeight="SemiBold"
                      TextWrapping="Wrap"
                      Foreground="{DynamicResource TodoTextPrimary}" />
-          <TextBlock Classes="meta" Text="{Binding CourseName}" TextWrapping="Wrap" />
+          <TextBlock Classes="meta" Text="{Binding DisplayTitle}" TextWrapping="Wrap" />
         </StackPanel>
 
         <StackPanel Spacing="2">

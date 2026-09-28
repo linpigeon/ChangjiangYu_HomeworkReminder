@@ -33,6 +33,13 @@ public partial class TodoItemViewModel(TodoItem model) : ViewModelBase
     public TodoKind Kind => Model.Kind;
     public string Title => Model.Title;
     public string CourseName => Model.CourseName;
+
+    /// <summary>展示用标题：剥离学期前缀（「2026秋-」「26-27-1学期 」等）。</summary>
+    public string DisplayTitle => DisplayText.StripTermPrefix(Model.Title);
+
+    /// <summary>展示用课程名：剥离学期前缀。</summary>
+    public string CourseDisplayName => DisplayText.StripTermPrefix(Model.CourseName);
+
     public string DueText => Model.DueText;
     public string RemainingText => Model.RemainingText;
     public string ProgressText => Model.ProgressText;
