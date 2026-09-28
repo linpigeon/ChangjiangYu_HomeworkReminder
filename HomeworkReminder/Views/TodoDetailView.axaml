@@ -64,7 +64,7 @@
                   IsChecked="{Binding IsDone, Mode=OneWay}"
                   Click="OnCheckboxClick" />
 
-        <Button Classes="primary" Content="在浏览器中打开该课程"
+        <Button Classes="primary" Content="{Binding OpenButtonText}"
                 HorizontalAlignment="Left"
                 Click="OnOpenSourceClick"
                 IsVisible="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />

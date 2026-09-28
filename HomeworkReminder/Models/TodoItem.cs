@@ -36,8 +36,8 @@ public sealed class TodoItem
 
     public double? Score { get; set; }
 
-    /// <summary>雨课堂站内的原始链接，便于跳回原页面。</summary>
-    public string? SourceUrl { get; init; }
+    /// <summary>雨课堂站内的原始链接，便于跳回原页面。增量校验路径会按新日志重建，故可写。</summary>
+    public string? SourceUrl { get; set; }
 
     /// <summary>应用内的已读状态（雨课堂单条已读没有服务端接口，仅 user_read_all 可反写）。</summary>
     public bool IsRead { get; set; }

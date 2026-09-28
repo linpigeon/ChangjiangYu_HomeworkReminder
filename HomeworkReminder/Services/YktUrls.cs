@@ -43,14 +43,21 @@ public static class YktUrls
         => $"{Base}/v2/web/noticeView/{classroomId}/{noticeId}?identity=0&type=9";
 
     /// <summary>
-    /// 考试 / 试卷类作业（type=5 的日志）。
-    /// <para>
-    /// 未验证：<paramref name="examId"/> 应传哪个 id（日志 id 还是试卷 id）没有实测确认，
-    /// 因此当前实现不使用它，统一回落到 <see cref="CourseLog"/>。
-    /// </para>
+    /// 考试 / 试卷类作业（type=5 的日志）的直达页。
+    /// <paramref name="examId"/> 传日志的 <c>courseware_id</c>——2026-09-28 用户实测
+    /// <c>/v2/web/exam/26109213/2144775</c> 可直达答题页（2144775 = 日志 courseware_id）。
     /// </summary>
     public static string Exam(long classroomId, long examId)
         => $"{Base}/v2/web/exam/{classroomId}/{examId}";
+
+    /// <summary>
+    /// 章节作业（type=19 的日志）的直达页。
+    /// 路由参数名是 exercise_id，实测对应日志 <c>content.leaf_type_id</c>：
+    /// 用 <c>get_exercise_detail/{id}/</c> 逐一试出来的——章节树节点 id 与
+    /// courseware_id 都返回 Permission Denied，只有 leaf_type_id 有数据（2026-09-28）。
+    /// </summary>
+    public static string Exercise(long classroomId, long leafTypeId, long skuId)
+        => $"{Base}/v2/web/exercise/{classroomId}/{leafTypeId}/{skuId}";
 
     /// <summary>平台标识。实测前端默认取 3。</summary>
     public const int PlatformId = 3;

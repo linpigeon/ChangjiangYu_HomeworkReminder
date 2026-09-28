@@ -169,6 +169,17 @@ public sealed class SyncService(IYktApi api) : ISyncService
                     .ToList();
                 if (cached.Count > 0)
                 {
+                    // 缓存项的链接按本次新日志重建：深链规则是后加的，旧缓存里还是课程页。
+                    // 日志是每次同步必拉的，这里零额外请求。按归一化标题配对——
+                    // 稳定 Id 的尾段是章节树 id，与日志 id 不同族，按 id 配对会漏。
+                    var byTitle = new Dictionary<string, YktActivity>(StringComparer.Ordinal);
+                    foreach (var a in homeworkActivities) byTitle[Normalize(a.Title)] = a;
+                    foreach (var item in cached)
+                    {
+                        if (byTitle.TryGetValue(Normalize(item.Title), out var act))
+                            item.SourceUrl = HomeworkUrl(act, course);
+                    }
+
                     await RefreshStatusOnly(course, cached, warnings, ct).ConfigureAwait(false);
                     homework.AddRange(cached);
                     reusedCourses++;
@@ -271,10 +282,10 @@ public sealed class SyncService(IYktApi api) : ISyncService
                     Done = done,
                     Total = total,
                     Score = score,
-                    // 作业详情页的路由是 /exam/{cid}/{eid} 或 /exercise/{cid}/{leafId}/{skuId}，
-                    // 但前者该传哪个 id（日志 id 还是试卷 id）没有实测确认，后者还缺 sku_id，
-                    // 所以统一指向课程日志页——作业就在该页的「未完成」页签下。
-                    SourceUrl = YktUrls.CourseLog(course.ClassroomId, api.Session.UniversityId),
+                    // 直达作业页：试卷类用日志 courseware_id（用户实测可直达答题页），
+                    // 章节作业用 content 的 leaf_type_id + sku_id（get_exercise_detail 实测）。
+                    // 拿不到就回落课程日志页。
+                    SourceUrl = HomeworkUrl(act, course),
                 });
             }
 
@@ -326,6 +337,26 @@ public sealed class SyncService(IYktApi api) : ISyncService
             CourseFullSyncedAt = fullSyncedAt,
             ReusedCourses = reusedCourses,
         };
+    }
+
+    /// <summary>
+    /// 作业的直达链接。试卷类（type=5）用日志的 courseware_id（用户实测直达答题页）；
+    /// 章节作业（type=19）用 content 的 leaf_type_id + sku_id（get_exercise_detail 实测，
+    /// 章节树节点 id 与 courseware_id 都返回 Permission Denied）。拿不到就回落课程日志页。
+    /// </summary>
+    private string HomeworkUrl(YktActivity act, YktCourse course)
+    {
+        if (act.Type == YktActivityType.ExamHomework
+            && long.TryParse(act.CoursewareId, CultureInfo.InvariantCulture, out var examId)
+            && examId > 0)
+            return YktUrls.Exam(course.ClassroomId, examId);
+
+        if (act.Type == YktActivityType.ChapterHomework
+            && act.Content?.LeafTypeId is { } leafTypeId
+            && act.Content.SkuId is { } skuId)
+            return YktUrls.Exercise(course.ClassroomId, leafTypeId, skuId);
+
+        return YktUrls.CourseLog(course.ClassroomId, api.Session.UniversityId);
     }
 
     /// <summary>

@@ -90,11 +90,14 @@
                               ToolTip.Tip="在应用内标记为已处理" />
 
                     <StackPanel Grid.Column="1" Margin="9,0,2,0" Spacing="1">
+                      <!-- 主标题作业信息、副标题科目（与主界面一致），截止时间随其后 -->
                       <TextBlock Text="{Binding Title}" FontSize="13"
                                  Classes.done="{Binding IsDone}" />
+                      <TextBlock Text="{Binding CourseName}" FontSize="11"
+                                 Foreground="{DynamicResource TodoTextSecondary}" />
                       <TextBlock Text="{Binding DueText}" FontSize="11"
                                  Classes.overdue="{Binding IsOverdue}"
-                                 Foreground="{DynamicResource TodoTextSecondary}" />
+                                 Foreground="{DynamicResource TodoTextTertiary}" />
                     </StackPanel>
                   </Grid>
                 </Border>

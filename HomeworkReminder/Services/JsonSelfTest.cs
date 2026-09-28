@@ -362,6 +362,36 @@ public static class JsonSelfTest
             Assert(!new YktLoginService.CookieClearResult(1, 1, 0, null).Ok, "有残留不得判定成功");
         });
 
+        Check("作业深链构造", () =>
+        {
+            // 试卷类（type=5）：用日志的 courseware_id 直达 /exam/{cid}/{examId}
+            var api = new FakeYktApi(
+                [Course(100, "课程A")],
+                new Dictionary<long, List<YktActivity>>
+                {
+                    [100] =
+                    [
+                        JsonSerializer.Deserialize(
+                            """{"id":1,"type":5,"title":"试卷作业","create_time":"1758000000000","courseware_id":"2144775"}""",
+                            AppJsonContext.Default.YktActivity)!,
+                        // 章节作业（type=19）：用 content 的 leaf_type_id + sku_id 直达 exercise 页
+                        JsonSerializer.Deserialize(
+                            """{"id":2,"type":19,"title":"章节作业","create_time":"1758000000000","content":{"leaf_id":48737438,"score_d":1790000000000,"leaf_type_id":3745003,"sku_id":12893715} }""",
+                            AppJsonContext.Default.YktActivity)!,
+                        // 缺直达字段：回落课程日志页
+                        HwActivity(3, 9001, "缺字段作业"),
+                    ],
+                });
+            var r = new SyncService(api).SyncAsync(null).GetAwaiter().GetResult();
+            var byTitle = r.Homework.ToDictionary(h => h.Title);
+            Assert(byTitle["试卷作业"].SourceUrl == "https://changjiang.yuketang.cn/v2/web/exam/100/2144775",
+                $"试卷类深链不符：{byTitle["试卷作业"].SourceUrl}");
+            Assert(byTitle["章节作业"].SourceUrl == "https://changjiang.yuketang.cn/v2/web/exercise/100/3745003/12893715",
+                $"章节作业深链不符：{byTitle["章节作业"].SourceUrl}");
+            Assert(byTitle["缺字段作业"].SourceUrl!.Contains("/v2/web/studentLog/100"),
+                $"缺字段时应回落课程页：{byTitle["缺字段作业"].SourceUrl}");
+        });
+
         await Task.CompletedTask.ConfigureAwait(false);
 
         Console.WriteLine();

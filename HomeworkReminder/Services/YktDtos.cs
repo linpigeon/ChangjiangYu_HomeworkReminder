@@ -48,6 +48,18 @@ public sealed class YktActivityContent
     /// <summary>叶子 id，缺失时为 null。</summary>
     [JsonIgnore]
     public long? LeafId => LeafIdRaw.Milliseconds;
+
+    /// <summary>章节作业直达页（/exercise/{cid}/{exerciseId}/{skuId}）用的 exercise_id。</summary>
+    [JsonPropertyName("leaf_type_id")] public YktNumber LeafTypeIdRaw { get; set; }
+
+    [JsonIgnore]
+    public long? LeafTypeId => LeafTypeIdRaw.Milliseconds;
+
+    /// <summary>章节作业直达页用的 sku_id。</summary>
+    [JsonPropertyName("sku_id")] public YktNumber SkuIdRaw { get; set; }
+
+    [JsonIgnore]
+    public long? SkuId => SkuIdRaw.Milliseconds;
 }
 
 /// <summary>
