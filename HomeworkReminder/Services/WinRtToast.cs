@@ -116,10 +116,13 @@ public static class WinRtToast
             return new ToastResult(false, "非 Windows 平台", 0);
 
         // 自动同步路径会在线程池线程上调用本方法，线程可能从未初始化 COM。
-        // S_FALSE（已初始化）视为成功；只有本次新初始化（S_OK）才负责配对卸载，
-        // 免得把线程池线程永久留在 MTA 里影响后续复用它的代码。
+        // 视为成功：S_FALSE（已 MTA 初始化）与 RPC_E_CHANGED_MODE（已是 STA——
+        // 比如 UI 主线程；WinRT 在 STA 下同样工作）。只有本次新初始化（S_OK）
+        // 才负责配对卸载，免得把线程池线程永久留在 MTA 里影响后续复用它的代码。
+        const int rpcEChangedMode = unchecked((int)0x80010106);
         var initHr = RoInitialize(RoInitMultithreaded);
-        if (initHr < 0) return new ToastResult(false, "初始化 COM（RoInitialize）", initHr);
+        if (initHr < 0 && initHr != rpcEChangedMode)
+            return new ToastResult(false, "初始化 COM（RoInitialize）", initHr);
         var ownApartment = initHr == 0;
 
         IntPtr xmlDoc = IntPtr.Zero, toastFactory = IntPtr.Zero, toast = IntPtr.Zero;
