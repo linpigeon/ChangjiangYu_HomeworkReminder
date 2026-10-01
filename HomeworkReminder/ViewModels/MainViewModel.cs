@@ -885,6 +885,77 @@ public sealed partial class MainViewModel : ViewModelBase
         else OpenSettings();
     }
 
+    // ---------------- 关于与更新检查 ----------------
+
+    /// <summary>当前版本号（设置页「关于」显示）。</summary>
+    public string AppVersionText => $"v{UpdateService.CurrentVersion}";
+
+    [ObservableProperty]
+    private bool _isCheckingUpdate;
+
+    /// <summary>检查更新的结果文案。</summary>
+    [ObservableProperty]
+    private string _updateStatus = string.Empty;
+
+    /// <summary>发现新版本时最新 release 的下载页地址（null = 无更新或未检查）。</summary>
+    [ObservableProperty]
+    private string? _updateUrl;
+
+    /// <summary>是否显示「前往下载」按钮。</summary>
+    public bool HasUpdateUrl => UpdateUrl is not null;
+
+    partial void OnUpdateUrlChanged(string? value) => OnPropertyChanged(nameof(HasUpdateUrl));
+
+    /// <summary>检查更新：并行查询 GitHub 与 Gitea 的最新 release，取较新的对比。</summary>
+    [RelayCommand]
+    private async Task CheckUpdateAsync()
+    {
+        if (IsCheckingUpdate) return;
+        IsCheckingUpdate = true;
+        UpdateStatus = "正在检查更新…";
+        UpdateUrl = null;
+        try
+        {
+            var outcome = await UpdateService.CheckAsync().ConfigureAwait(true);
+            var errors = outcome.Errors.ToList();
+
+            if (outcome.Best is { Release: { TagName: { } tag } release } best)
+            {
+                if (UpdateService.IsNewer(tag))
+                {
+                    UpdateUrl = release.HtmlUrl;
+                    UpdateStatus = $"发现新版本 {tag}（{best.Source}），当前 {AppVersionText}。";
+                }
+                else
+                {
+                    UpdateStatus = $"已是最新版本（{AppVersionText}；远端最新 {tag}，来自 {best.Source}）。";
+                }
+
+                // 另一个源不可达也要如实告知，免得用户以为两边都查了没问题。
+                if (errors.Count > 0)
+                    UpdateStatus += $"（另一更新源不可达：{string.Join("；", errors)}）";
+            }
+            else
+            {
+                UpdateStatus = $"检查更新失败：{string.Join("；", errors)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"检查更新失败：{ex.Message}";
+        }
+        finally
+        {
+            IsCheckingUpdate = false;
+        }
+    }
+
+    /// <summary>打开最新 release 的下载页（由平台头注入的浏览器打开）。</summary>
+    public void OpenUpdatePage()
+    {
+        if (UpdateUrl is { } url) PlatformServices?.OpenUrl(url);
+    }
+
     /// <summary>托盘菜单与界面调用：切换小组件显示。</summary>
     public void SetWidgetEnabled(bool enabled)
     {

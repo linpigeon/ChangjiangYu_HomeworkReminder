@@ -216,6 +216,19 @@ public static class JsonSelfTest
                        && Math.Abs(back.WallpaperOpacityPercent - 55) < 0.001,
                     "设置往返不符");
             });
+
+            Check("ReleaseInfo 解析与版本比较", () =>
+            {
+                // GitHub/Gitea latest release 的关键字段。
+                const string payload = """
+                    {"tag_name": "v9.9.9", "name": "v9.9.9", "html_url": "https://example.com/r", "prerelease": false}
+                    """;
+                var info = JsonSerializer.Deserialize(payload, AppJsonContext.Default.ReleaseInfo);
+                Assert(info is { TagName: "v9.9.9", HtmlUrl: "https://example.com/r" }, "ReleaseInfo 解析不符");
+                Assert(UpdateService.IsNewer("v9.9.9"), "远端 v9.9.9 应判定为有更新");
+                Assert(!UpdateService.IsNewer("v0.0.1"), "远端 v0.0.1 不应判定为有更新");
+                Assert(!UpdateService.IsNewer("不是版本号"), "非法 tag 不应判定为有更新");
+            });
         }
         finally
         {

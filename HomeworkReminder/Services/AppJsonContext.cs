@@ -49,6 +49,8 @@ namespace HomeworkReminder.Services;
 [JsonSerializable(typeof(LocalState))]
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(TodoCacheFile))]
+// ---- 更新检查 ----
+[JsonSerializable(typeof(ReleaseInfo))]
 // internal：上下文包含 internal 的 SessionStore.ProtectedEnvelope，
 // public 上下文会导致生成代码的可访问性不一致（CS0053）。全部使用点都在本程序集内。
 internal partial class AppJsonContext : JsonSerializerContext;

@@ -42,4 +42,9 @@ public partial class SettingsView : UserControl
     {
         Vm?.ClearWallpaper();
     }
+
+    private void OnOpenUpdatePageClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.OpenUpdatePage();
+    }
 }
