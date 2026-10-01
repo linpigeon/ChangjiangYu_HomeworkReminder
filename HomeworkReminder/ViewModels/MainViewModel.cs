@@ -838,6 +838,53 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private bool _widgetEnabled = AppSettings.Current.WidgetVisible;
 
+    /// <summary>设置页开关改动（设置页双向绑定 → 走统一的切换路径）。</summary>
+    partial void OnWidgetEnabledChanged(bool value)
+    {
+        if (value != AppSettings.Current.WidgetVisible) SetWidgetEnabled(value);
+    }
+
+    /// <summary>点窗口「关闭」的行为（0 = 最小化到托盘，1 = 直接退出；仅桌面生效）。</summary>
+    [ObservableProperty]
+    private int _closeBehaviorIndex = AppSettings.Current.CloseBehaviorIndex;
+
+    partial void OnCloseBehaviorIndexChanged(int value)
+    {
+        AppSettings.Current.CloseBehaviorIndex = value;
+        AppSettings.Current.Save();
+    }
+
+    /// <summary>发现新作业时是否发系统通知（持久化在 settings.json）。</summary>
+    [ObservableProperty]
+    private bool _notifyOnNewHomework = AppSettings.Current.NotifyOnNewHomework;
+
+    partial void OnNotifyOnNewHomeworkChanged(bool value)
+    {
+        AppSettings.Current.NotifyOnNewHomework = value;
+        AppSettings.Current.Save();
+    }
+
+    /// <summary>桌面平台专属的设置项（关闭行为、桌面小组件）是否显示。</summary>
+    public bool ShowDesktopSettings => OperatingSystem.IsWindows();
+
+    /// <summary>设置页是否打开（主界面内嵌页面，替代原外观浮层）。</summary>
+    [ObservableProperty]
+    private bool _settingsOpen;
+
+    /// <summary>打开设置页（侧边栏齿轮按钮）。</summary>
+    public void OpenSettings()
+    {
+        SettingsOpen = true;
+        DrawerOpen = false;
+    }
+
+    /// <summary>打开/关闭设置页（桌面端没有返回键，再点一次齿轮退出设置页）。</summary>
+    public void ToggleSettings()
+    {
+        if (SettingsOpen) SettingsOpen = false;
+        else OpenSettings();
+    }
+
     /// <summary>托盘菜单与界面调用：切换小组件显示。</summary>
     public void SetWidgetEnabled(bool enabled)
     {
@@ -1205,6 +1252,7 @@ public sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     public void OnNavChanged()
     {
+        SettingsOpen = false;
         SelectedItem = null;
         ApplyFilter();
         RefreshNavState();

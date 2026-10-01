@@ -36,6 +36,23 @@
       </Grid>
     </Border>
 
+    <!-- 设置页：全屏覆盖（在详情页之上、抽屉遮罩之下），左上角返回 -->
+    <Border Background="{DynamicResource TodoDialogBackground}"
+            IsVisible="{Binding SettingsOpen}">
+      <Grid RowDefinitions="Auto,*">
+        <Button Grid.Row="0" Classes="tool" Click="OnSettingsBackClick"
+                Margin="10,10,0,0" HorizontalAlignment="Left"
+                ToolTip.Tip="返回列表">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Classes="icon" Text="&#xF060;" />
+            <TextBlock Text="返回" FontSize="13" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TodoTextSecondary}" />
+          </StackPanel>
+        </Button>
+        <views:SettingsView Grid.Row="1" />
+      </Grid>
+    </Border>
+
     <!-- 抽屉遮罩（点遮罩收起） -->
     <Border Background="#66000000"
             IsVisible="{Binding DrawerOpen}"

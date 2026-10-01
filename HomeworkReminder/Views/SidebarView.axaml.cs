@@ -1,8 +1,6 @@
-using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using HomeworkReminder.ViewModels;
 
 namespace HomeworkReminder.Views;
@@ -44,36 +42,8 @@ public partial class SidebarView : UserControl
         await vm.LogoutCommand.ExecuteAsync(null);
     }
 
-    private async void OnPickWallpaperClick(object? sender, RoutedEventArgs e)
+    private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm is not { } vm) return;
-        if (TopLevel.GetTopLevel(this) is not { } top) return;
-
-        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "选择壁纸图片",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("图片")
-                {
-                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"],
-                },
-            ],
-        });
-
-        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
-        if (!string.IsNullOrEmpty(path))
-        {
-            vm.SetWallpaper(path);
-            // 选完收起浮层，让用户立刻看到效果。
-            if (sender is Button b) b.Flyout?.Hide();
-        }
-    }
-
-    private void OnClearWallpaperClick(object? sender, RoutedEventArgs e)
-    {
-        Vm?.ClearWallpaper();
-        if (sender is Button b) b.Flyout?.Hide();
+        Vm?.ToggleSettings();
     }
 }

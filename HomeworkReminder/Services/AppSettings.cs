@@ -6,11 +6,9 @@ namespace HomeworkReminder.Services;
 
 /// <summary>
 /// 应用级设置（学期、学校 id 等），持久化在 <c>settings.json</c>（与会话文件同目录，
-/// 见 <see cref="AppPaths.DataDirectory"/>）。
-/// <para>
-/// 目前没有设置界面：直接编辑该文件即可，下次启动生效。文件不存在或损坏时回落到默认值。
+/// 见 <see cref="AppPaths.DataDirectory"/>）。界面入口是主界面里的「设置」页。
+/// 文件不存在或损坏时回落到默认值。
 /// 代码里不要再写死学期/学校 id，一律从 <see cref="Current"/> 取。
-/// </para>
 /// </summary>
 public sealed class AppSettings
 {
@@ -28,6 +26,9 @@ public sealed class AppSettings
 
     /// <summary>主题：0 = 浅色，1 = 深色，2 = 跟随系统。</summary>
     public int ThemeModeIndex { get; set; } = 2;
+
+    /// <summary>点窗口「关闭」的行为：0 = 最小化到托盘继续运行（默认），1 = 直接退出程序。</summary>
+    public int CloseBehaviorIndex { get; set; }
 
     // ---------------- 自动同步与通知 ----------------
 

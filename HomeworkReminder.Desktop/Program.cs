@@ -55,6 +55,13 @@ sealed class Program
             : null;
         if (loginCheckIndex >= 0) App.ForceLoginPage = true;
 
+        // --selfcheck-settings [png]：不登录直接渲染设置页（主界面内嵌页），
+        // 用于查看设置页布局；数据与登录态无关，不做网络初始化。
+        var settingsCheckIndex = Array.IndexOf(args, "--selfcheck-settings");
+        var settingsRenderPath = settingsCheckIndex >= 0 && args.Length > settingsCheckIndex + 1
+            ? args[settingsCheckIndex + 1]
+            : null;
+
         // 环境变量 HWREMINDER_FORCE_LOGIN=1：正常运行模式下也强制停在登录页，
         // 便于在真实窗口（含 WebView）里验证登录界面。
         if (Environment.GetEnvironmentVariable("HWREMINDER_FORCE_LOGIN") == "1")
@@ -126,6 +133,12 @@ sealed class Program
         if (loginCheckIndex >= 0)
         {
             RunSelfCheck(loginRenderPath);
+            return;
+        }
+
+        if (settingsCheckIndex >= 0)
+        {
+            RunSettingsSelfCheck(settingsRenderPath);
             return;
         }
 
@@ -367,6 +380,29 @@ sealed class Program
             vm.SelectedNav = vm.NavItems.First(n => n.Key == "homework");
             vm.OnNavChanged();
         }
+
+        var window = new MainWindow { DataContext = vm };
+        var code = SelfCheck.Run(window, renderPath);
+        Environment.Exit(code);
+    }
+
+    /// <summary>
+    /// 设置页自检：不读会话、不同步（设置页内容与登录态无关），
+    /// 直接把主窗口切到设置页后跑布局与绑定检查、离屏渲染成 PNG。
+    /// </summary>
+    private static void RunSettingsSelfCheck(string? renderPath)
+    {
+        App.DeferInitialLoad = true;
+
+        var builder = BuildAvaloniaApp();
+        builder.SetupWithoutStarting();
+
+        var app = (App)Application.Current!;
+        var vm = app.ViewModel ?? throw new InvalidOperationException("App did not create a view model");
+
+        // 伪造成已进入主界面并打开设置页：设置项本身不依赖待办数据。
+        vm.State = ViewModels.AppState.Ready;
+        vm.OpenSettings();
 
         var window = new MainWindow { DataContext = vm };
         var code = SelfCheck.Run(window, renderPath);

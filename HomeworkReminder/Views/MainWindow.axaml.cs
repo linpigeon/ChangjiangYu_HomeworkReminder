@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using Avalonia.Controls;
+using HomeworkReminder.Services;
 using HomeworkReminder.ViewModels;
 
 namespace HomeworkReminder.Views;
@@ -13,8 +14,8 @@ namespace HomeworkReminder.Views;
 /// 正常尺寸与可拉伸行为（与 XAML 中声明的默认尺寸一致）。
 /// </para>
 /// <para>
-/// 点「关闭」不直接退出：先弹确认框，可选择直接关闭或最小化到系统托盘
-/// （<see cref="Hide"/> 后窗口从任务栏消失，只剩托盘图标）。
+/// 点「关闭」的行为由设置决定（设置页可改）：默认最小化到系统托盘继续运行
+/// （<see cref="Hide"/> 后窗口从任务栏消失，只剩托盘图标），也可选直接退出程序。
 /// </para>
 /// </summary>
 public partial class MainWindow : Window
@@ -29,7 +30,7 @@ public partial class MainWindow : Window
     private const double MainMinWidth = 960;
     private const double MainMinHeight = 580;
 
-    /// <summary>托盘菜单「退出」等路径要求真正关闭时置位，跳过关闭确认。</summary>
+    /// <summary>托盘菜单「退出」等路径要求真正关闭时置位，跳过关闭行为拦截。</summary>
     private bool _allowRealClose;
 
     private MainViewModel? _vm;
@@ -45,7 +46,7 @@ public partial class MainWindow : Window
         Attach(DataContext as MainViewModel);
     }
 
-    /// <summary>真正退出程序（托盘菜单、确认框「退出」用）：跳过关闭确认，结束进程。</summary>
+    /// <summary>真正退出程序（托盘「退出」、关闭行为「直接退出」用）：结束进程。</summary>
     public void QuitForReal()
     {
         _allowRealClose = true;
@@ -67,25 +68,16 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_allowRealClose) return;
 
-        // 必须先同步取消关闭，再弹确认框。
+        // 关闭行为由设置决定：最小化到托盘（默认）或直接退出。
         e.Cancel = true;
-
-        var choice = await MessageBox.ConfirmCloseAsync(this);
-        switch (choice)
-        {
-            case MessageBox.CloseChoice.Minimize:
-                Hide();
-                break;
-            case MessageBox.CloseChoice.Quit:
-                // 与托盘「退出」走同一套收尾，真正结束进程。
-                QuitForReal();
-                break;
-            // Cancel：什么都不做，窗口保持打开。
-        }
+        if (AppSettings.Current.CloseBehaviorIndex == 1)
+            QuitForReal();
+        else
+            Hide();
     }
 
     private void Attach(MainViewModel? vm)

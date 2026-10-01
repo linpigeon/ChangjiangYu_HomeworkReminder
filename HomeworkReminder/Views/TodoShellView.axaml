@@ -23,7 +23,12 @@
 
     <!-- ClipToBounds：列宽收起为 0 时内容不能溢出绘制 -->
     <views:SidebarView Grid.Column="0" ClipToBounds="True" />
-    <views:TodoListView Grid.Column="1" />
-    <views:TodoDetailView Grid.Column="2" Background="{Binding SurfaceBrush}" />
+    <views:TodoListView Grid.Column="1" IsVisible="{Binding !SettingsOpen}" />
+    <views:TodoDetailView Grid.Column="2" Background="{Binding SurfaceBrush}"
+                          IsVisible="{Binding !SettingsOpen}" />
+
+    <!-- 设置页：占中右两栏（内嵌页面，不是弹窗） -->
+    <views:SettingsView Grid.Column="1" Grid.ColumnSpan="2"
+                        IsVisible="{Binding SettingsOpen}" />
   </Grid>
 </UserControl>

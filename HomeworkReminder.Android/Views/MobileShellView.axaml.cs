@@ -26,4 +26,10 @@ public partial class MobileShellView : UserControl
     {
         if (Vm is { } vm) vm.SelectedItem = null;
     }
+
+    /// <summary>设置页的返回键。</summary>
+    private void OnSettingsBackClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is { } vm) vm.SettingsOpen = false;
+    }
 }
