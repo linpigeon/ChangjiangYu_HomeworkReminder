@@ -1370,7 +1370,8 @@ public sealed partial class MainViewModel : ViewModelBase
         StatusDetail =
             $"{result.CourseCount} 门课程 · {result.ActivityCount} 条日志 · " +
             $"{result.Homework.Count} 项作业（待完成 {pending}） · {result.Announcements.Count} 条公告" +
-            (result.ReusedCourses > 0 ? $" · {result.ReusedCourses} 门课走增量校验" : "");
+            (result.ReusedCourses > 0 ? $" · {result.ReusedCourses} 门课走增量校验" : "") +
+            (result.ArchivedCourses > 0 ? $" · 含 {result.ArchivedCourses} 门已归档课程" : "");
 
         State = AppState.Ready;
 

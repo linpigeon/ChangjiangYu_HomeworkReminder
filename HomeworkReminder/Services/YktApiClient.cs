@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -25,6 +26,12 @@ public interface IYktApi : IDisposable
 
     /// <summary>校验登录态。失效时抛 <see cref="YktAuthExpiredException"/>。</summary>
     Task<IReadOnlyList<YktCourse>> GetCoursesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 已归档的班级。归档后不再出现在 courses/list，但内容接口（学习日志等）仍可用。
+    /// 归档列表读取失败不应阻断主流程，实现方按异常透出、由调用方决定是否降级。
+    /// </summary>
+    Task<IReadOnlyList<YktCourse>> GetArchivedCoursesAsync(CancellationToken ct = default);
 
     Task<IReadOnlyList<YktActivity>> GetLearnLogsAsync(long classroomId, CancellationToken ct = default);
 
@@ -90,6 +97,15 @@ public sealed class YktApiClient : IYktApi, IDisposable
             ? l.Deserialize(AppJsonContext.Default.ListYktCourse)
             : null;
         return list ?? [];
+    }
+
+    public async Task<IReadOnlyList<YktCourse>> GetArchivedCoursesAsync(CancellationToken ct = default)
+    {
+        var data = await GetDataAsync("/v2/api/web/classroom_archive", ct).ConfigureAwait(false);
+        var list = data.TryGetProperty("classrooms", out var c) && c.ValueKind == JsonValueKind.Array
+            ? c.Deserialize(AppJsonContext.Default.ListYktArchivedClassroom)
+            : null;
+        return list?.Select(a => a.ToCourse()).ToList() ?? [];
     }
 
     public async Task<IReadOnlyList<YktActivity>> GetLearnLogsAsync(long classroomId, CancellationToken ct = default)

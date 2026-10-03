@@ -347,6 +347,42 @@ public static class JsonSelfTest
             Assert(r4.ReusedCourses == 0, "缺全量时间戳的旧缓存应触发全量校验");
         });
 
+        Check("归档课程参与同步", () =>
+        {
+            // 只在归档列表里的班级（courses/list 不返回）：合并后应按学期过滤参与同步。
+            var api = new FakeYktApi(
+                [],
+                new Dictionary<long, List<YktActivity>>
+                {
+                    [100] = [HwActivity(1, 1001, "归档课作业")],
+                })
+            {
+                Archived = [Course(100, "归档课")],
+            };
+            var r = new SyncService(api).SyncAsync(null).GetAwaiter().GetResult();
+            Assert(r.CourseCount == 1 && r.ArchivedCourses == 1,
+                $"归档课程未参与同步：courses={r.CourseCount} archived={r.ArchivedCourses}");
+            Assert(r.Homework.Count == 1, "归档课程的作业未同步出来");
+        });
+
+        Check("归档课程不影响在册课程", () =>
+        {
+            // 同一班级同时在册与归档（理论上不该发生）：去重后不重复同步。
+            var api = new FakeYktApi(
+                [Course(100, "课程A")],
+                new Dictionary<long, List<YktActivity>>
+                {
+                    [100] = [HwActivity(1, 1001, "作业")],
+                })
+            {
+                Archived = [Course(100, "课程A"), new YktCourse { ClassroomId = 200, Name = "别的学期课", Term = 202501 }],
+            };
+            var r = new SyncService(api).SyncAsync(null).GetAwaiter().GetResult();
+            Assert(r.CourseCount == 1, $"在册+归档重复时应只同步一次，实际 {r.CourseCount} 门");
+            // 归档的 200 是别的学期，不进本次统计
+            Assert(r.ArchivedCourses == 0, $"非当前学期的归档课不应计入：{r.ArchivedCourses}");
+        });
+
         Check("issue#1 已读公告不被默认过滤", () =>
         {
             var list = new ViewModels.TodoListViewModel();
@@ -503,6 +539,12 @@ public static class JsonSelfTest
 
         public Task<IReadOnlyList<YktCourse>> GetCoursesAsync(CancellationToken ct = default)
             => Task.FromResult(courses);
+
+        /// <summary>归档班级，默认没有；需要覆盖归档合并路径的用例可以传入。</summary>
+        public IReadOnlyList<YktCourse> Archived { get; init; } = [];
+
+        public Task<IReadOnlyList<YktCourse>> GetArchivedCoursesAsync(CancellationToken ct = default)
+            => Task.FromResult(Archived);
 
         public Task<IReadOnlyList<YktActivity>> GetLearnLogsAsync(long classroomId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<YktActivity>>(logs.GetValueOrDefault(classroomId, []));

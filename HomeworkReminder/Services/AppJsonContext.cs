@@ -33,6 +33,8 @@ namespace HomeworkReminder.Services;
 // ---- 雨课堂接口 DTO ----
 [JsonSerializable(typeof(List<YktCourse>))]
 [JsonSerializable(typeof(YktCourse))]
+[JsonSerializable(typeof(List<YktArchivedClassroom>))]
+[JsonSerializable(typeof(YktArchivedClassroom))]
 [JsonSerializable(typeof(List<YktActivity>))]
 [JsonSerializable(typeof(YktActivity))]
 [JsonSerializable(typeof(YktProgressData))]

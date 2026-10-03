@@ -46,6 +46,9 @@ public sealed class SyncResult
     /// <summary>这次同步里走增量捷径（跳过节点的课程数），仅用于状态展示。</summary>
     public int ReusedCourses { get; init; }
 
+    /// <summary>参与本次同步的已归档课程数（归档班级不在课程列表接口里），仅用于状态展示。</summary>
+    public int ArchivedCourses { get; init; }
+
     public IEnumerable<TodoItem> PendingHomework =>
         Homework.Where(h => h.Status != TodoStatus.Completed);
 
@@ -80,7 +83,28 @@ public sealed class SyncService(IYktApi api) : ISyncService
         var warnings = new List<string>();
 
         progress?.Report("正在读取课程列表…");
-        var allCourses = await api.GetCoursesAsync(ct).ConfigureAwait(false);
+        var allCourses = (await api.GetCoursesAsync(ct).ConfigureAwait(false)).ToList();
+
+        // 归档班级不在 courses/list 里，但内容接口仍然可用：合并进来，旧学期才能同步。
+        // 归档列表读失败只降级（归档课不参与本次同步），不阻断主流程。
+        var archivedInTerm = 0;
+        try
+        {
+            var archived = await api.GetArchivedCoursesAsync(ct).ConfigureAwait(false);
+            var known = new HashSet<long>(allCourses.Select(c => c.ClassroomId));
+            var extra = archived.Where(c => known.Add(c.ClassroomId)).ToList();
+            archivedInTerm = extra.Count(c => c.Term == api.Session.Term);
+            allCourses.AddRange(extra);
+        }
+        catch (YktAuthExpiredException)
+        {
+            throw;
+        }
+        catch (YktApiException ex)
+        {
+            warnings.Add($"归档课程读取失败（{ex.Message}），已归档的课程不参与本次同步。");
+        }
+
         var courses = allCourses.Where(c => c.Term == api.Session.Term).ToList();
 
         var signatures = new Dictionary<long, string>();
@@ -88,7 +112,7 @@ public sealed class SyncService(IYktApi api) : ISyncService
         if (courses.Count == 0)
         {
             warnings.Add($"没有找到 {api.Session.Term} 学期的课程（接口共返回 {allCourses.Count} 门）。" +
-                         "如果课程确实存在，可能是学期标识需要调整。");
+                         "如果课程确实存在，可能是学期标识需要调整，或课程已被归档。");
             return new SyncResult { CourseCount = 0, Warnings = warnings, CourseSignatures = signatures };
         }
 
@@ -342,6 +366,7 @@ public sealed class SyncService(IYktApi api) : ISyncService
             CourseSignatures = signatures,
             CourseFullSyncedAt = fullSyncedAt,
             ReusedCourses = reusedCourses,
+            ArchivedCourses = archivedInTerm,
         };
     }
 

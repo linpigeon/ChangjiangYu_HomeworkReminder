@@ -22,6 +22,28 @@ public sealed class YktCourseMeta
     [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// `GET /v2/api/web/classroom_archive` 里的归档班级。
+/// 用户（或老师）归档的班级不再出现在 courses/list，但学习日志等内容接口仍然可用；
+/// 字段结构与 <see cref="YktCourse"/> 几乎一致，只是班级 id 叫 <c>id</c>。
+/// </summary>
+public sealed class YktArchivedClassroom
+{
+    [JsonPropertyName("id")] public long ClassroomId { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("term")] public int Term { get; set; }
+    [JsonPropertyName("course")] public YktCourseMeta? Course { get; set; }
+
+    /// <summary>转成课程列表里使用的统一形态。</summary>
+    public YktCourse ToCourse() => new()
+    {
+        ClassroomId = ClassroomId,
+        Name = Name,
+        Term = Term,
+        Course = Course,
+    };
+}
+
 /// <summary>学习日志条目。作业与公告都由这里发现。</summary>
 public sealed class YktActivity
 {
