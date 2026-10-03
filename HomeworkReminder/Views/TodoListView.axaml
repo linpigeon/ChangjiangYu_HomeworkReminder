@@ -85,14 +85,14 @@
                   <StackPanel Grid.Column="1" Margin="10,0,8,0" Spacing="3">
                     <TextBlock Classes="title" Text="{Binding DisplaySubject}" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <!-- 显式宽度才会触发 TextTrimming：只给 MaxWidth 时
-                           文本会被硬裁切（"通信2" 这种断尾）。 -->
-                      <TextBlock Classes="faint" Text="{Binding DisplayTitle}"
-                                 Width="200" />
-                      <TextBlock Classes="overdue" Text="{Binding StatusText}"
+                    <!-- 副标题行：Grid 的 * 列让标题按实际宽度截断（显式 Width=200
+                         在手机上会盖住右侧徽标），完成状态跟在标题后。 -->
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Classes="faint" Text="{Binding DisplayTitle}" />
+                      <TextBlock Grid.Column="1" Classes="overdue" Text="{Binding StatusText}"
+                                 Margin="6,0,0,0"
                                  IsVisible="{Binding IsCompletedOnServer}" />
-                    </StackPanel>
+                    </Grid>
 
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <TextBlock Classes="meta" Text="{Binding DueText}" />

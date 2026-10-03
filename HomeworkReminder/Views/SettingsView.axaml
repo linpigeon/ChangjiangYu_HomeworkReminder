@@ -35,10 +35,11 @@
       <Grid Grid.Row="2" Margin="26,8,26,22">
 
         <!-- 设置 -->
-        <ScrollViewer IsVisible="{Binding !AboutTabOpen}"
+        <ScrollViewer x:Name="SettingsTabScroller" IsVisible="{Binding !AboutTabOpen}"
                       Classes.pagefadein="{Binding !AboutTabOpen}"
                       HorizontalScrollBarVisibility="Disabled">
-          <StackPanel HorizontalAlignment="Left" MaxWidth="560" Spacing="22">
+          <StackPanel HorizontalAlignment="Left" Spacing="22"
+                      MaxWidth="{Binding Bounds.Width, ElementName=SettingsTabScroller}">
 
             <!-- 外观 -->
             <StackPanel Spacing="12">
@@ -85,7 +86,7 @@
                 <TextBlock Grid.Column="0" Text="自动同步" FontSize="13" VerticalAlignment="Center"
                            Foreground="{DynamicResource TodoTextSecondary}" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                  <NumericUpDown Minimum="0" Maximum="1440" FormatString="0" Width="110"
+                  <NumericUpDown Minimum="0" Maximum="1440" FormatString="0" Width="130"
                                  Value="{Binding AutoRefreshMinutes, Mode=TwoWay}" />
                   <TextBlock Text="分钟一次" FontSize="12" VerticalAlignment="Center"
                              Foreground="{DynamicResource TodoTextTertiary}" />
@@ -100,17 +101,20 @@
             <StackPanel Spacing="12">
               <TextBlock Text="学期" FontSize="14" FontWeight="SemiBold"
                          Foreground="{DynamicResource TodoTextPrimary}" />
+              <!-- 手机竖排：窄屏上一行放不下三个控件 -->
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <NumericUpDown Minimum="2020" Maximum="2035" FormatString="0" Width="130"
+                               VerticalContentAlignment="Center"
                                Value="{Binding TermYear, Mode=TwoWay}" />
-                <ComboBox SelectedIndex="{Binding TermHalfIndex, Mode=TwoWay}" MinWidth="110">
+                <ComboBox SelectedIndex="{Binding TermHalfIndex, Mode=TwoWay}" MinWidth="100">
                   <ComboBoxItem>第一学期</ComboBoxItem>
                   <ComboBoxItem>第二学期</ComboBoxItem>
                 </ComboBox>
-                <Button Classes="outline" Content="切换学期" Padding="10,5" FontSize="12"
-                        Command="{Binding ApplyTermCommand}"
-                        IsEnabled="{Binding !IsBusy}" />
               </StackPanel>
+              <Button Classes="outline" Content="切换学期" Padding="10,5" FontSize="12"
+                      HorizontalAlignment="Left"
+                      Command="{Binding ApplyTermCommand}"
+                      IsEnabled="{Binding !IsBusy}" />
               <TextBlock FontSize="11" TextWrapping="Wrap"
                          Foreground="{DynamicResource TodoTextTertiary}"
                          Text="课程按学期过滤（学年起始年 + 学期）。切换学期会清空本地缓存并全量重新同步，首次同步较慢属正常。" />
@@ -156,10 +160,11 @@
         </ScrollViewer>
 
         <!-- 关于 -->
-        <ScrollViewer IsVisible="{Binding AboutTabOpen}"
+        <ScrollViewer x:Name="AboutTabScroller" IsVisible="{Binding AboutTabOpen}"
                       Classes.pagefadein="{Binding AboutTabOpen}"
                       HorizontalScrollBarVisibility="Disabled">
-          <StackPanel HorizontalAlignment="Left" MaxWidth="560" Spacing="22">
+          <StackPanel HorizontalAlignment="Left" Spacing="22"
+                      MaxWidth="{Binding Bounds.Width, ElementName=AboutTabScroller}">
 
             <!-- 应用信息 -->
             <StackPanel Spacing="12">

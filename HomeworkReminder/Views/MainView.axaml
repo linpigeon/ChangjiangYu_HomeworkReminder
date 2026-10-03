@@ -11,8 +11,12 @@
     Browser / 单视图 / 移动端平台的根视图。桌面端用的是 MainWindow。
     内容外壳由平台决定：默认 TodoShellView（桌面三栏）；移动端头部工程
     （Android）通过 App.MobileShellFactory 注入 MobileShellView（抽屉式）。
+    壁纸与遮罩层与桌面 MainWindow 同款：壁纸（可选）→ 遮罩 → 内容。
   -->
   <Panel>
+    <Image Source="{Binding WallpaperImage}" Stretch="UniformToFill"
+           IsVisible="{Binding HasWallpaper}" />
+    <Border Background="{Binding VeilBrush}" Opacity="{Binding VeilOpacity}" />
     <ContentControl Name="ShellHost" IsVisible="{Binding ShowContent}" />
     <views:LoginView IsVisible="{Binding ShowLogin}" />
   </Panel>
