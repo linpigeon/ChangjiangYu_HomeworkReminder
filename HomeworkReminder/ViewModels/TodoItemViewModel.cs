@@ -1,3 +1,4 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HomeworkReminder.Models;
 
@@ -23,8 +24,17 @@ public partial class TodoItemViewModel(TodoItem model) : ViewModelBase
     /// <summary>应用内标记的可读文本。</summary>
     public string DoneLabel => IsDone ? "已在应用内标记" : "未标记";
 
-    /// <summary>打开按钮文案：作业直达答题页，公告仍落到课程页。</summary>
-    public string OpenButtonText => Kind == TodoKind.Homework ? "在浏览器中打开该作业" : "在浏览器中打开该课程";
+    /// <summary>打开按钮文案：作业直达答题页，公告仍落到课程页。Android 上优先拉起雨课堂 App。</summary>
+    public string OpenButtonText
+    {
+        get
+        {
+            var isHomework = Kind == TodoKind.Homework;
+            if (OperatingSystem.IsAndroid())
+                return isHomework ? "在雨课堂中打开该作业" : "在雨课堂中打开该课程";
+            return isHomework ? "在浏览器中打开该作业" : "在浏览器中打开该课程";
+        }
+    }
 
     [ObservableProperty]
     private bool _isSelected;

@@ -19,6 +19,8 @@ public class AndroidApp : AvaloniaAndroidApplication<App>
         AndroidPlatformHooks.Register();
         // 注入移动端外壳（抽屉式布局）：MainView 用它替换共享项目里的桌面三栏外壳。
         App.MobileShellFactory = () => new Views.MobileShellView();
+        // 平台服务：浏览器打开 + 雨课堂 App 跳转。
+        ViewModels.MainViewModel.PlatformServices = new AndroidPlatformServices();
     }
 
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)

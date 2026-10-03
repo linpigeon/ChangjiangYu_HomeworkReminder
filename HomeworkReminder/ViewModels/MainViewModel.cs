@@ -1533,6 +1533,11 @@ public sealed partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ListSubtitle));
     }
 
+    /// <summary>「打开」按钮的提示文案：Android 优先拉起雨课堂 App。</summary>
+    public string OpenSourceTooltip => OperatingSystem.IsAndroid()
+        ? "在雨课堂 App 中打开（未安装则回落浏览器）"
+        : "在浏览器中打开：作业直达答题页，公告落到课程日志页";
+
     /// <summary>在系统浏览器中打开雨课堂原页面。</summary>
     public void OpenSource(TodoItemViewModel item)
     {
@@ -1541,7 +1546,11 @@ public sealed partial class MainViewModel : ViewModelBase
                   ?? YktUrls.CourseLog(item.ClassroomId, _session?.UniversityId ?? AppSettings.Current.UniversityId);
         // 打开 URL 是平台相关操作，转发给平台头注入的实现（Desktop 用 Process.Start），
         // 共享项目不直接依赖平台 API；实现内部自行吞掉异常。
-        PlatformServices?.OpenUrl(url);
+        // Android 优先拉起雨课堂 App（未安装则回落浏览器）。
+        if (PlatformServices is { } ps)
+        {
+            if (!ps.OpenInYktApp(url)) ps.OpenUrl(url);
+        }
     }
 
     /// <summary>

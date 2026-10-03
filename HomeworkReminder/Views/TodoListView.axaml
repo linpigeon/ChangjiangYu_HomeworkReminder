@@ -34,7 +34,7 @@
           </Button>
           <Button Classes="tool" Click="OnOpenSourceClick"
                   IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}"
-                  ToolTip.Tip="在浏览器中打开：作业直达答题页，公告落到课程日志页">
+                  ToolTip.Tip="{Binding OpenSourceTooltip}">
             <TextBlock Classes="icon" Text="&#xF35D;" />
           </Button>
         </StackPanel>

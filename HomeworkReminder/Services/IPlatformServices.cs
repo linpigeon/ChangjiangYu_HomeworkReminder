@@ -18,4 +18,10 @@ public interface IPlatformServices
     /// 实现应自行吞掉异常：打不开浏览器不影响应用其它功能。
     /// </summary>
     void OpenUrl(string url);
+
+    /// <summary>
+    /// 尝试在雨课堂 App 中打开作业链接（仅移动端有意义）。返回 false = 未安装或失败，
+    /// 调用方应回落到 <see cref="OpenUrl"/>。
+    /// </summary>
+    bool OpenInYktApp(string url) => false;
 }
