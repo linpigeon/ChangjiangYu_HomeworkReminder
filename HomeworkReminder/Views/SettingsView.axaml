@@ -12,8 +12,12 @@
     桌面：占三栏布局的中右两栏；手机：由宿主加返回键全屏覆盖。
     页内分「设置 / 关于」两个二级选项卡，同一页面内交叉淡入淡出切换。
     桌面专属项（关闭行为、桌面小组件）在 Android 上隐藏。
+
+    背景用不透明的 TodoDialogBackground（而不是半透明的 ListBrush）：
+    设置页叠在待办区上方做淡入淡出，半透明背景会把底下的列表透出来，
+    看起来像「设置挡住了别的界面」。
   -->
-  <Border Background="{Binding ListBrush}">
+  <Border Background="{DynamicResource TodoDialogBackground}">
     <Grid RowDefinitions="Auto,Auto,*">
 
       <TextBlock Grid.Row="0" Classes="sectionHeader" Text="设置"

@@ -401,12 +401,33 @@ sealed class Program
         var app = (App)Application.Current!;
         var vm = app.ViewModel ?? throw new InvalidOperationException("App did not create a view model");
 
-        // 伪造成已进入主界面并打开设置页：设置项本身不依赖待办数据。
-        vm.State = ViewModels.AppState.Ready;
-        vm.OpenSettings();
-        if (aboutTab) vm.ShowAboutTab();
+        // 有会话就做真实初始化（离线/无会话也能渲染，只是没有待办数据）：
+        // 设置页盖在待办区上，有数据才能验证淡出是否把下面的列表藏掉。
+        var initTask = Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            try
+            {
+                await vm.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"数据初始化失败（继续做界面自检）：{ex.Message}");
+            }
+        });
+        PumpUntil(initTask, TimeSpan.FromMinutes(4));
+
+        // 伪造成已进入主界面：设置项本身不依赖待办数据。
+        if (vm.State != ViewModels.AppState.Ready)
+            vm.State = ViewModels.AppState.Ready;
 
         var window = new MainWindow { DataContext = vm };
+        // 设置页在窗口显示后再打开（与用户点齿轮的运行时路径一致），
+        // 才能验证「打开设置 → 待办区淡出」的过渡在运行时确实执行。
+        window.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            vm.OpenSettings();
+            if (aboutTab) vm.ShowAboutTab();
+        });
         var code = SelfCheck.Run(window, renderPath);
         Environment.Exit(code);
     }
