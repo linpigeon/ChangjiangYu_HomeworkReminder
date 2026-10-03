@@ -213,16 +213,61 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private bool _drawerOpen;
 
-    /// <summary>侧边栏列宽：收起时归零，把空间让给列表。</summary>
+    /// <summary>
+    /// 侧边栏列宽：收起时归零，展开时取记忆的宽度。
+    /// 注意不用绑定驱动 ColumnDefinition.Width——GridSplitter 拖动会用 SetValue
+    /// 覆盖本地值，把绑定顶掉；宽度由 TodoShellView 代码后置显式应用。
+    /// </summary>
     public Avalonia.Controls.GridLength SidebarColumnWidth =>
         SidebarCollapsed
             ? new Avalonia.Controls.GridLength(0)
-            : new Avalonia.Controls.GridLength(252);
+            : new Avalonia.Controls.GridLength(AppSettings.Current.SidebarWidth);
+
+    /// <summary>待办列表栏宽（详情栏吃剩余空间）。同样由视图代码后置应用。</summary>
+    public Avalonia.Controls.GridLength ListColumnWidth =>
+        new(AppSettings.Current.ListWidth);
 
     partial void OnSidebarCollapsedChanged(bool value) => OnPropertyChanged(nameof(SidebarColumnWidth));
 
     /// <summary>切换侧边栏收起/展开（宽屏）。</summary>
-    public void ToggleSidebar() => SidebarCollapsed = !SidebarCollapsed;
+    public void ToggleSidebar()
+    {
+        // 被分隔条拖到 0 的情况：直接恢复记忆宽度，而不是先「收起」一轮。
+        if (!SidebarCollapsed && AppSettings.Current.SidebarWidth < 1)
+        {
+            AppSettings.Current.SidebarWidth = 252;
+            OnPropertyChanged(nameof(SidebarColumnWidth));
+            return;
+        }
+        SidebarCollapsed = !SidebarCollapsed;
+    }
+
+    /// <summary>
+    /// GridSplitter 拖动结束后由视图调用：把当前栏宽记入设置。
+    /// 侧边栏收起态（0）与过小值不落盘，避免把「隐藏」误存为宽度。
+    /// </summary>
+    public void PersistPaneWidths(Avalonia.Controls.GridLength sidebar, Avalonia.Controls.GridLength list)
+    {
+        var changed = false;
+        if (!SidebarCollapsed
+            && sidebar.GridUnitType == Avalonia.Controls.GridUnitType.Pixel
+            && sidebar.Value >= 120
+            && Math.Abs(sidebar.Value - AppSettings.Current.SidebarWidth) > 0.5)
+        {
+            AppSettings.Current.SidebarWidth = sidebar.Value;
+            changed = true;
+        }
+
+        if (list.GridUnitType == Avalonia.Controls.GridUnitType.Pixel
+            && list.Value >= 220
+            && Math.Abs(list.Value - AppSettings.Current.ListWidth) > 0.5)
+        {
+            AppSettings.Current.ListWidth = list.Value;
+            changed = true;
+        }
+
+        if (changed) SaveSettingsDebounced();
+    }
 
     [ObservableProperty]
     private bool _hasWallpaper;
@@ -870,6 +915,16 @@ public sealed partial class MainViewModel : ViewModelBase
     /// <summary>设置页是否打开（主界面内嵌页面，替代原外观浮层）。</summary>
     [ObservableProperty]
     private bool _settingsOpen;
+
+    /// <summary>设置页的二级选项卡：false = 设置，true = 关于。</summary>
+    [ObservableProperty]
+    private bool _aboutTabOpen;
+
+    /// <summary>设置页切到「设置」选项卡。</summary>
+    public void ShowSettingsTab() => AboutTabOpen = false;
+
+    /// <summary>设置页切到「关于」选项卡。</summary>
+    public void ShowAboutTab() => AboutTabOpen = true;
 
     /// <summary>打开设置页（侧边栏齿轮按钮）。</summary>
     public void OpenSettings()

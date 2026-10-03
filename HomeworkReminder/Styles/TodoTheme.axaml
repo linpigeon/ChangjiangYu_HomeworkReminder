@@ -274,4 +274,49 @@
     <Setter Property="Width" Value="8" />
   </Style>
 
+  <!-- ============ 页面切换过渡（淡入淡出） ============
+       同一区域的两个页面常驻控件树，靠 Opacity 交叉淡入淡出切换；
+       不活跃页面同时关掉命中测试，避免挡住下面的页面。 -->
+  <Style Selector="Grid.pagefade, ScrollViewer.pagefade, Border.pagefade, UserControl.pagefade">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Grid.pagefade.inactive, ScrollViewer.pagefade.inactive, Border.pagefade.inactive, UserControl.pagefade.inactive">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <!-- ============ 设置页的二级选项卡 ============ -->
+  <Style Selector="Button.settab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="12,7" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextSecondary}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.settab:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoHover}" />
+  </Style>
+  <Style Selector="Button.settab.active">
+    <Setter Property="Foreground" Value="{DynamicResource TodoAccent}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.settab.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoAccentSoft}" />
+  </Style>
+
+  <!-- ============ 分栏拖动条 ============ -->
+  <Style Selector="GridSplitter.colsplit">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="SizeWestEast" />
+  </Style>
+  <Style Selector="GridSplitter.colsplit:pointerover">
+    <Setter Property="Background" Value="{DynamicResource TodoAccentSoft}" />
+  </Style>
+
 </Styles>

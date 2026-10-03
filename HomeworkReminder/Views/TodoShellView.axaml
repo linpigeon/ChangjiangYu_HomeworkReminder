@@ -10,25 +10,44 @@
              x:DataType="vm:MainViewModel">
 
   <!--
-    桌面外壳：三栏（导航 / 列表 / 详情）。
-    移动端外壳是 Android 工程里的 MobileShellView（抽屉式布局），
-    与这里共用同一 MainViewModel 与 SidebarView/TodoListView/TodoDetailView 部件。
+    桌面外壳：三栏（导航 / 列表 / 详情），栏间有 GridSplitter 可自由拖宽，
+    宽度在拖动结束后由代码后置记入 settings.json（PersistPaneWidths）。
+
+    注意：栏宽不做绑定——GridSplitter 拖动时用 SetValue 写 ColumnDefinition.Width，
+    会把绑定顶掉，此后 ViewModel 侧的变化（如收起侧边栏）就到不了界面。
+    所以初始宽度与收起/展开都由 TodoShellView 代码后置显式应用。
+
+    设置页与待办区常驻同一单元格，靠 pagefade 类做交叉淡入淡出（Opacity 过渡），
+    而不是 IsVisible 硬切。
   -->
-  <Grid>
+  <Grid x:Name="ShellGrid">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="{Binding SidebarColumnWidth}" />
-      <ColumnDefinition Width="400" />
+      <ColumnDefinition Width="252" />
+      <ColumnDefinition Width="5" />
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
 
     <!-- ClipToBounds：列宽收起为 0 时内容不能溢出绘制 -->
     <views:SidebarView Grid.Column="0" ClipToBounds="True" />
-    <views:TodoListView Grid.Column="1" IsVisible="{Binding !SettingsOpen}" />
-    <views:TodoDetailView Grid.Column="2" Background="{Binding SurfaceBrush}"
-                          IsVisible="{Binding !SettingsOpen}" />
+    <GridSplitter Grid.Column="1" Classes="colsplit" DragCompleted="OnSplitterDragCompleted"
+                  IsVisible="{Binding !SidebarCollapsed}" />
 
-    <!-- 设置页：占中右两栏（内嵌页面，不是弹窗） -->
-    <views:SettingsView Grid.Column="1" Grid.ColumnSpan="2"
-                        IsVisible="{Binding SettingsOpen}" />
+    <Grid Grid.Column="2">
+      <!-- 待办区：列表 + 分隔条 + 详情 -->
+      <Grid x:Name="TodoPane" Classes="pagefade" Classes.inactive="{Binding SettingsOpen}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="400" MinWidth="220" />
+          <ColumnDefinition Width="5" />
+          <ColumnDefinition Width="*" MinWidth="280" />
+        </Grid.ColumnDefinitions>
+
+        <views:TodoListView Grid.Column="0" />
+        <GridSplitter Grid.Column="1" Classes="colsplit" DragCompleted="OnSplitterDragCompleted" />
+        <views:TodoDetailView Grid.Column="2" Background="{Binding SurfaceBrush}" />
+      </Grid>
+
+      <!-- 设置页：与待办区同格叠加，淡入淡出切换（内嵌页面，不是弹窗） -->
+      <views:SettingsView Classes="pagefade" Classes.inactive="{Binding !SettingsOpen}" />
+    </Grid>
   </Grid>
 </UserControl>

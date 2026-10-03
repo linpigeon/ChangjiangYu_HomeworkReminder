@@ -47,4 +47,14 @@ public partial class SettingsView : UserControl
     {
         Vm?.OpenUpdatePage();
     }
+
+    private void OnShowSettingsTabClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.ShowSettingsTab();
+    }
+
+    private void OnShowAboutTabClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.ShowAboutTab();
+    }
 }

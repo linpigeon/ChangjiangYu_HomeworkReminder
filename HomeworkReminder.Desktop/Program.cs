@@ -138,7 +138,8 @@ sealed class Program
 
         if (settingsCheckIndex >= 0)
         {
-            RunSettingsSelfCheck(settingsRenderPath);
+            // --selfcheck-settings <png> [about]：渲染设置页，带 about 参数渲染「关于」选项卡。
+            RunSettingsSelfCheck(settingsRenderPath, args.Contains("about"));
             return;
         }
 
@@ -390,7 +391,7 @@ sealed class Program
     /// 设置页自检：不读会话、不同步（设置页内容与登录态无关），
     /// 直接把主窗口切到设置页后跑布局与绑定检查、离屏渲染成 PNG。
     /// </summary>
-    private static void RunSettingsSelfCheck(string? renderPath)
+    private static void RunSettingsSelfCheck(string? renderPath, bool aboutTab)
     {
         App.DeferInitialLoad = true;
 
@@ -403,6 +404,7 @@ sealed class Program
         // 伪造成已进入主界面并打开设置页：设置项本身不依赖待办数据。
         vm.State = ViewModels.AppState.Ready;
         vm.OpenSettings();
+        if (aboutTab) vm.ShowAboutTab();
 
         var window = new MainWindow { DataContext = vm };
         var code = SelfCheck.Run(window, renderPath);

@@ -30,6 +30,12 @@ public sealed class AppSettings
     /// <summary>点窗口「关闭」的行为：0 = 最小化到托盘继续运行（默认），1 = 直接退出程序。</summary>
     public int CloseBehaviorIndex { get; set; }
 
+    /// <summary>桌面三栏：侧边栏宽度（DIP，GridSplitter 拖动后记忆）。</summary>
+    public double SidebarWidth { get; set; } = 252;
+
+    /// <summary>桌面三栏：待办列表栏宽度（DIP）。详情栏吃剩余空间，无需记忆。</summary>
+    public double ListWidth { get; set; } = 400;
+
     // ---------------- 自动同步与通知 ----------------
 
     /// <summary>

@@ -10,113 +10,134 @@
   <!--
     设置页（主界面内嵌，不再是浮层/小窗口）。
     桌面：占三栏布局的中右两栏；手机：由宿主加返回键全屏覆盖。
+    页内分「设置 / 关于」两个二级选项卡，同一页面内交叉淡入淡出切换。
     桌面专属项（关闭行为、桌面小组件）在 Android 上隐藏。
   -->
   <Border Background="{Binding ListBrush}">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-      <StackPanel MaxWidth="520" Margin="26,22" Spacing="22">
+    <Grid RowDefinitions="Auto,Auto,*">
 
-        <TextBlock Classes="sectionHeader" Text="设置" />
+      <TextBlock Grid.Row="0" Classes="sectionHeader" Text="设置"
+                 Margin="26,20,26,0" />
 
-        <!-- 外观 -->
-        <StackPanel Spacing="12">
-          <TextBlock Text="外观" FontSize="14" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TodoTextPrimary}" />
+      <!-- 二级选项卡 -->
+      <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" Margin="26,10,26,0">
+        <Button Classes="settab" Classes.active="{Binding !AboutTabOpen}"
+                Content="设置" Click="OnShowSettingsTabClick" />
+        <Button Classes="settab" Classes.active="{Binding AboutTabOpen}"
+                Content="关于" Click="OnShowAboutTabClick" />
+      </StackPanel>
 
-          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-            <TextBlock Grid.Column="0" Text="主题" FontSize="13" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TodoTextSecondary}" />
-            <ComboBox Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}"
-                      HorizontalAlignment="Left" MinWidth="150">
-              <ComboBoxItem>浅色</ComboBoxItem>
-              <ComboBoxItem>深色</ComboBoxItem>
-              <ComboBoxItem>跟随系统</ComboBoxItem>
-            </ComboBox>
-          </Grid>
+      <!-- 选项卡内容：两页同格叠加，pagefade 淡入淡出 -->
+      <Grid Grid.Row="2" Margin="26,8,26,22">
 
-          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-            <TextBlock Grid.Column="0" Text="壁纸" FontSize="13" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TodoTextSecondary}" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-              <Button Classes="outline" Content="选择壁纸…"
-                      Click="OnPickWallpaperClick" Padding="10,5" FontSize="12" />
-              <Button Classes="tool" Content="清除壁纸"
-                      Click="OnClearWallpaperClick"
-                      IsVisible="{Binding HasWallpaper}" />
+        <!-- 设置 -->
+        <ScrollViewer Classes="pagefade" Classes.inactive="{Binding AboutTabOpen}"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel MaxWidth="520" Spacing="22">
+
+            <!-- 外观 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="外观" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" Text="主题" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <ComboBox Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}"
+                          HorizontalAlignment="Left" MinWidth="150">
+                  <ComboBoxItem>浅色</ComboBoxItem>
+                  <ComboBoxItem>深色</ComboBoxItem>
+                  <ComboBoxItem>跟随系统</ComboBoxItem>
+                </ComboBox>
+              </Grid>
+
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" Text="壁纸" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <Button Classes="outline" Content="选择壁纸…"
+                          Click="OnPickWallpaperClick" Padding="10,5" FontSize="12" />
+                  <Button Classes="tool" Content="清除壁纸"
+                          Click="OnClearWallpaperClick"
+                          IsVisible="{Binding HasWallpaper}" />
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Spacing="2">
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TodoTextTertiary}"
+                           Text="背景透明度：越大越透——有壁纸时透出壁纸，没有壁纸时透出桌面磨砂。" />
+                <Slider Minimum="0" Maximum="85" TickFrequency="5"
+                        Value="{Binding WallpaperOpacityPercent, Mode=TwoWay}" />
+              </StackPanel>
             </StackPanel>
-          </Grid>
 
-          <StackPanel Spacing="2">
-            <TextBlock FontSize="11" TextWrapping="Wrap"
-                       Foreground="{DynamicResource TodoTextTertiary}"
-                       Text="背景透明度：越大越透——有壁纸时透出壁纸，没有壁纸时透出桌面磨砂。" />
-            <Slider Minimum="0" Maximum="85" TickFrequency="5"
-                    Value="{Binding WallpaperOpacityPercent, Mode=TwoWay}" />
+            <!-- 关闭行为（仅桌面） -->
+            <StackPanel Spacing="12" IsVisible="{Binding ShowDesktopSettings}">
+              <TextBlock Text="关闭窗口" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <ComboBox SelectedIndex="{Binding CloseBehaviorIndex, Mode=TwoWay}"
+                        HorizontalAlignment="Left" MinWidth="240">
+                <ComboBoxItem>最小化到托盘，后台继续同步</ComboBoxItem>
+                <ComboBoxItem>直接退出程序</ComboBoxItem>
+              </ComboBox>
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         Text="最小化到托盘时窗口收起、托盘保留图标，自动同步与新作业提醒照常进行。" />
+            </StackPanel>
+
+            <!-- 桌面小组件（仅桌面） -->
+            <StackPanel Spacing="12" IsVisible="{Binding ShowDesktopSettings}">
+              <TextBlock Text="桌面小组件" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <ToggleSwitch Content="显示桌面小组件"
+                            OnContent="开" OffContent="关"
+                            IsChecked="{Binding WidgetEnabled, Mode=TwoWay}"
+                            FontSize="13"
+                            Foreground="{DynamicResource TodoTextSecondary}" />
+            </StackPanel>
+
+            <!-- 通知 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="通知" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <ToggleSwitch Content="发现新作业时发送系统通知"
+                            OnContent="开" OffContent="关"
+                            IsChecked="{Binding NotifyOnNewHomework, Mode=TwoWay}"
+                            FontSize="13"
+                            Foreground="{DynamicResource TodoTextSecondary}" />
+            </StackPanel>
+
           </StackPanel>
-        </StackPanel>
-
-        <!-- 关闭行为（仅桌面） -->
-        <StackPanel Spacing="12" IsVisible="{Binding ShowDesktopSettings}">
-          <TextBlock Text="关闭窗口" FontSize="14" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TodoTextPrimary}" />
-          <ComboBox SelectedIndex="{Binding CloseBehaviorIndex, Mode=TwoWay}"
-                    HorizontalAlignment="Left" MinWidth="240">
-            <ComboBoxItem>最小化到托盘，后台继续同步</ComboBoxItem>
-            <ComboBoxItem>直接退出程序</ComboBoxItem>
-          </ComboBox>
-          <TextBlock FontSize="11" TextWrapping="Wrap"
-                     Foreground="{DynamicResource TodoTextTertiary}"
-                     Text="最小化到托盘时窗口收起、托盘保留图标，自动同步与新作业提醒照常进行。" />
-        </StackPanel>
-
-        <!-- 桌面小组件（仅桌面） -->
-        <StackPanel Spacing="12" IsVisible="{Binding ShowDesktopSettings}">
-          <TextBlock Text="桌面小组件" FontSize="14" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TodoTextPrimary}" />
-          <ToggleSwitch Content="显示桌面小组件"
-                        OnContent="开" OffContent="关"
-                        IsChecked="{Binding WidgetEnabled, Mode=TwoWay}"
-                        FontSize="13"
-                        Foreground="{DynamicResource TodoTextSecondary}" />
-        </StackPanel>
-
-        <!-- 通知 -->
-        <StackPanel Spacing="12">
-          <TextBlock Text="通知" FontSize="14" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TodoTextPrimary}" />
-          <ToggleSwitch Content="发现新作业时发送系统通知"
-                        OnContent="开" OffContent="关"
-                        IsChecked="{Binding NotifyOnNewHomework, Mode=TwoWay}"
-                        FontSize="13"
-                        Foreground="{DynamicResource TodoTextSecondary}" />
-        </StackPanel>
+        </ScrollViewer>
 
         <!-- 关于 -->
-        <StackPanel Spacing="12">
-          <TextBlock Text="关于" FontSize="14" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TodoTextPrimary}" />
-          <StackPanel Spacing="2">
-            <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="13"
-                       Foreground="{DynamicResource TodoTextPrimary}" />
-            <TextBlock Text="{Binding AppVersionText, StringFormat='版本 {0}'}" FontSize="12"
-                       Foreground="{DynamicResource TodoTextTertiary}" />
-            <TextBlock Text="更新源：GitHub 与 Gitea 镜像仓库" FontSize="11"
-                       Foreground="{DynamicResource TodoTextTertiary}" />
+        <ScrollViewer Classes="pagefade" Classes.inactive="{Binding !AboutTabOpen}"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel MaxWidth="520" Spacing="12">
+            <StackPanel Spacing="2">
+              <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="15" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <TextBlock Text="{Binding AppVersionText, StringFormat='版本 {0}'}" FontSize="12"
+                         Foreground="{DynamicResource TodoTextTertiary}" />
+              <TextBlock Text="更新源：GitHub 与 Gitea 镜像仓库" FontSize="11"
+                         Foreground="{DynamicResource TodoTextTertiary}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="outline" Content="检查更新" Padding="10,5" FontSize="12"
+                      Command="{Binding CheckUpdateCommand}"
+                      IsEnabled="{Binding !IsCheckingUpdate}" />
+              <Button Classes="primary" Content="前往下载" Padding="10,5" FontSize="12"
+                      Click="OnOpenUpdatePageClick"
+                      IsVisible="{Binding HasUpdateUrl}" />
+            </StackPanel>
+            <TextBlock Text="{Binding UpdateStatus}" FontSize="11" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TodoTextTertiary}"
+                       IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="outline" Content="检查更新" Padding="10,5" FontSize="12"
-                    Command="{Binding CheckUpdateCommand}"
-                    IsEnabled="{Binding !IsCheckingUpdate}" />
-            <Button Classes="primary" Content="前往下载" Padding="10,5" FontSize="12"
-                    Click="OnOpenUpdatePageClick"
-                    IsVisible="{Binding HasUpdateUrl}" />
-          </StackPanel>
-          <TextBlock Text="{Binding UpdateStatus}" FontSize="11" TextWrapping="Wrap"
-                     Foreground="{DynamicResource TodoTextTertiary}"
-                     IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        </StackPanel>
+        </ScrollViewer>
 
-      </StackPanel>
-    </ScrollViewer>
+      </Grid>
+    </Grid>
   </Border>
 </UserControl>
