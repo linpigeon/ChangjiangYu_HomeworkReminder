@@ -11,11 +11,11 @@
     设置页（主界面内嵌，不再是浮层/小窗口）。
     桌面：占三栏布局的中右两栏；手机：由宿主加返回键全屏覆盖。
     页内分「设置 / 关于」两个二级选项卡，IsVisible 切换 + 淡入动画。
+    内容一律靠左对齐、紧跟选项卡下方，不居中。
     桌面专属项（关闭行为、桌面小组件）在 Android 上隐藏。
 
     背景用不透明的 TodoDialogBackground（而不是半透明的 ListBrush）：
-    设置页叠在待办区上方做淡入淡出，半透明背景会把底下的列表透出来，
-    看起来像「设置挡住了别的界面」。
+    设置页叠在待办区上方做切换，半透明背景会把底下的列表透出来。
   -->
   <Border Background="{DynamicResource TodoDialogBackground}">
     <Grid RowDefinitions="Auto,Auto,*">
@@ -38,7 +38,7 @@
         <ScrollViewer IsVisible="{Binding !AboutTabOpen}"
                       Classes.pagefadein="{Binding !AboutTabOpen}"
                       HorizontalScrollBarVisibility="Disabled">
-          <StackPanel MaxWidth="520" Spacing="22">
+          <StackPanel HorizontalAlignment="Left" MaxWidth="560" Spacing="22">
 
             <!-- 外观 -->
             <StackPanel Spacing="12">
@@ -75,6 +75,45 @@
                 <Slider Minimum="0" Maximum="85" TickFrequency="5"
                         Value="{Binding WallpaperOpacityPercent, Mode=TwoWay}" />
               </StackPanel>
+            </StackPanel>
+
+            <!-- 同步 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="同步" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" Text="自动同步" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <NumericUpDown Minimum="0" Maximum="1440" FormatString="0" Width="110"
+                                 Value="{Binding AutoRefreshMinutes, Mode=TwoWay}" />
+                  <TextBlock Text="分钟一次" FontSize="12" VerticalAlignment="Center"
+                             Foreground="{DynamicResource TodoTextTertiary}" />
+                </StackPanel>
+              </Grid>
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         Text="每隔多少分钟自动同步一次作业并发新作业提醒；0 = 关闭自动同步。非 0 时最小 5 分钟，改后立刻生效。" />
+            </StackPanel>
+
+            <!-- 学期 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="学期" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <NumericUpDown Minimum="2020" Maximum="2035" FormatString="0" Width="130"
+                               Value="{Binding TermYear, Mode=TwoWay}" />
+                <ComboBox SelectedIndex="{Binding TermHalfIndex, Mode=TwoWay}" MinWidth="110">
+                  <ComboBoxItem>第一学期</ComboBoxItem>
+                  <ComboBoxItem>第二学期</ComboBoxItem>
+                </ComboBox>
+                <Button Classes="outline" Content="切换学期" Padding="10,5" FontSize="12"
+                        Command="{Binding ApplyTermCommand}"
+                        IsEnabled="{Binding !IsBusy}" />
+              </StackPanel>
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         Text="课程按学期过滤（学年起始年 + 学期）。切换学期会清空本地缓存并全量重新同步，首次同步较慢属正常。" />
             </StackPanel>
 
             <!-- 关闭行为（仅桌面） -->
@@ -120,26 +159,52 @@
         <ScrollViewer IsVisible="{Binding AboutTabOpen}"
                       Classes.pagefadein="{Binding AboutTabOpen}"
                       HorizontalScrollBarVisibility="Disabled">
-          <StackPanel MaxWidth="520" Spacing="12">
-            <StackPanel Spacing="2">
-              <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="15" FontWeight="SemiBold"
+          <StackPanel HorizontalAlignment="Left" MaxWidth="560" Spacing="22">
+
+            <!-- 应用信息 -->
+            <StackPanel Spacing="12">
+              <StackPanel Spacing="2">
+                <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TodoTextPrimary}" />
+                <TextBlock Text="{Binding AppVersionText, StringFormat='版本 {0}'}" FontSize="12"
+                           Foreground="{DynamicResource TodoTextTertiary}" />
+                <TextBlock Text="更新源：GitHub 与 Gitea 镜像仓库" FontSize="11"
+                           Foreground="{DynamicResource TodoTextTertiary}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="outline" Content="检查更新" Padding="10,5" FontSize="12"
+                        Command="{Binding CheckUpdateCommand}"
+                        IsEnabled="{Binding !IsCheckingUpdate}" />
+                <Button Classes="primary" Content="前往下载" Padding="10,5" FontSize="12"
+                        Click="OnOpenUpdatePageClick"
+                        IsVisible="{Binding HasUpdateUrl}" />
+              </StackPanel>
+              <TextBlock Text="{Binding UpdateStatus}" FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+
+            <!-- 当前状态（原侧边栏底部的登录/同步信息） -->
+            <StackPanel Spacing="8">
+              <TextBlock Text="当前状态" FontSize="14" FontWeight="SemiBold"
                          Foreground="{DynamicResource TodoTextPrimary}" />
-              <TextBlock Text="{Binding AppVersionText, StringFormat='版本 {0}'}" FontSize="12"
-                         Foreground="{DynamicResource TodoTextTertiary}" />
-              <TextBlock Text="更新源：GitHub 与 Gitea 镜像仓库" FontSize="11"
-                         Foreground="{DynamicResource TodoTextTertiary}" />
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding LoginStatusText}" FontSize="12"
+                           Foreground="{DynamicResource TodoTextSecondary}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SyncStatus}" FontSize="12"
+                           Foreground="{DynamicResource TodoTextTertiary}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding CacheNote}" FontSize="12"
+                           Foreground="{DynamicResource TodoTextTertiary}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding CacheNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding StatusDetail}" FontSize="12"
+                           Foreground="{DynamicResource TodoTextTertiary}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="outline" Content="检查更新" Padding="10,5" FontSize="12"
-                      Command="{Binding CheckUpdateCommand}"
-                      IsEnabled="{Binding !IsCheckingUpdate}" />
-              <Button Classes="primary" Content="前往下载" Padding="10,5" FontSize="12"
-                      Click="OnOpenUpdatePageClick"
-                      IsVisible="{Binding HasUpdateUrl}" />
-            </StackPanel>
-            <TextBlock Text="{Binding UpdateStatus}" FontSize="11" TextWrapping="Wrap"
-                       Foreground="{DynamicResource TodoTextTertiary}"
-                       IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
           </StackPanel>
         </ScrollViewer>
 

@@ -74,23 +74,8 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- 底部：登录态与同步状态 -->
+      <!-- 底部：操作按钮。登录态/同步状态等信息已移到「设置 → 关于」。 -->
       <StackPanel Grid.Row="2" Margin="16,8,16,14" Spacing="6">
-        <TextBlock Text="作业提醒 · 长江雨课堂" FontSize="11" FontWeight="SemiBold"
-                   Foreground="{DynamicResource TodoTextSecondary}" />
-        <TextBlock Text="{Binding LoginStatusText}" FontSize="11"
-                   Foreground="{DynamicResource TodoTextTertiary}"
-                   TextWrapping="Wrap" />
-        <TextBlock Text="{Binding SyncStatus}" FontSize="11"
-                   Foreground="{DynamicResource TodoTextTertiary}"
-                   TextWrapping="Wrap" />
-        <TextBlock Text="{Binding CacheNote}" FontSize="11"
-                   Foreground="{DynamicResource TodoTextTertiary}"
-                   TextWrapping="Wrap"
-                   IsVisible="{Binding CacheNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Text="{Binding StatusDetail}" FontSize="11"
-                   Foreground="{DynamicResource TodoTextTertiary}"
-                   TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Button Classes="outline" Content="退出登录" Click="OnLogoutClick"
                   HorizontalAlignment="Left" Padding="10,5" FontSize="11" />

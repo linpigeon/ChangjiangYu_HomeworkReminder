@@ -916,6 +916,82 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private bool _settingsOpen;
 
+    // ---------------- 同步与学期设置（设置页） ----------------
+
+    /// <summary>
+    /// 自动同步间隔（分钟，0 = 关闭）。改动即保存；已登录时立刻重启定时同步让新间隔生效。
+    /// NumericUpDown 已在界面限定了范围，这里仍过一次归一化兜底（手改 settings.json 的路径）。
+    /// </summary>
+    [ObservableProperty]
+    private int _autoRefreshMinutes = AppSettings.Current.AutoRefreshMinutes;
+
+    partial void OnAutoRefreshMinutesChanged(int value)
+    {
+        var minutes = AppSettings.NormalizeRefreshMinutes(value);
+        AppSettings.Current.AutoRefreshMinutes = minutes;
+        SaveSettingsDebounced();
+        // 只重启正在跑/该跑的自动同步：未登录或同步未就绪时不碰，避免空转。
+        if (_api is not null && State == AppState.Ready && AutoSync.IntervalMinutes != minutes)
+            _ = AutoSync.StartAsync(minutes);
+    }
+
+    /// <summary>学年起始年（学期代码 = 年 × 100 + 学期序号，如 202601 = 2026-2027 学年第一学期）。</summary>
+    [ObservableProperty]
+    private int _termYear = AppSettings.Current.Term / 100;
+
+    /// <summary>学期序号下标：0 = 第一学期，1 = 第二学期。</summary>
+    [ObservableProperty]
+    private int _termHalfIndex = Math.Clamp(AppSettings.Current.Term % 100 - 1, 0, 1);
+
+    /// <summary>
+    /// 切换学期。课程列表按学期过滤，跨学期的增量签名没有意义，因此切换后
+    /// 丢掉待办缓存基准、全量重拉一次。未登录时只保存设置，登录后生效。
+    /// </summary>
+    [RelayCommand]
+    private async Task ApplyTermAsync()
+    {
+        var term = TermYear * 100 + TermHalfIndex + 1;
+        if (term == AppSettings.Current.Term)
+        {
+            SyncStatus = "学期未变化";
+            return;
+        }
+
+        AppSettings.Current.Term = term;
+        AppSettings.Current.Save();
+
+        if (_session is null)
+        {
+            SyncStatus = "学期设置已保存，登录后生效";
+            return;
+        }
+
+        // 与换账号同理：先停自动同步、等在途同步收尾，再换 API 实例。
+        await AutoSync.StopAsync().ConfigureAwait(true);
+        await WaitForSyncToStopAsync().ConfigureAwait(true);
+
+        var old = _session;
+        _session = new YktSession
+        {
+            SessionId = old.SessionId,
+            CsrfToken = old.CsrfToken,
+            LoginType = old.LoginType,
+            ExpiresAt = old.ExpiresAt,
+            UniversityId = old.UniversityId,
+            Term = term,
+        };
+        _api?.Dispose();
+        _api = new YktApiClient(_session);
+        await _sessionStore.SaveAsync(SessionFile.From(_session)).ConfigureAwait(true);
+
+        // 清掉增量同步基准：旧学期的签名与按课全量时间戳对新学期无意义。
+        _cacheFile = null;
+
+        await RefreshAsync().ConfigureAwait(true);
+        if (State == AppState.Ready)
+            await AutoSync.StartAsync(AppSettings.Current.AutoRefreshMinutes).ConfigureAwait(true);
+    }
+
     /// <summary>设置页的二级选项卡：false = 设置，true = 关于。</summary>
     [ObservableProperty]
     private bool _aboutTabOpen;
