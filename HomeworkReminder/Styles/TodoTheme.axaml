@@ -274,19 +274,23 @@
     <Setter Property="Width" Value="8" />
   </Style>
 
-  <!-- ============ 页面切换过渡（淡入淡出） ============
-       同一区域的两个页面常驻控件树，靠 Opacity 交叉淡入淡出切换；
-       不活跃页面同时关掉命中测试，避免挡住下面的页面。 -->
-  <Style Selector="Grid.pagefade, ScrollViewer.pagefade, Border.pagefade, UserControl.pagefade">
-    <Setter Property="Transitions">
-      <Transitions>
-        <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
-      </Transitions>
-    </Setter>
-  </Style>
-  <Style Selector="Grid.pagefade.inactive, ScrollViewer.pagefade.inactive, Border.pagefade.inactive, UserControl.pagefade.inactive">
-    <Setter Property="Opacity" Value="0" />
-    <Setter Property="IsHitTestVisible" Value="False" />
+  <!-- ============ 页面切换过渡（淡入） ============
+       显示/隐藏用 IsVisible 硬切（保证终态正确），淡入用关键帧动画实现：
+       pagefadein 类由绑定在页面显示时加上，动画从透明播到不透明。
+       不用 Opacity 的 DoubleTransition 做淡出——真机上淡出方向的合成动画
+       不可靠（淡出后属性停留在 1，页面关不掉）；淡入即使动画不播，
+       终态也是不透明，不会出错。 -->
+  <Style Selector="Grid.pagefadein, ScrollViewer.pagefadein, Border.pagefadein, UserControl.pagefadein">
+    <Style.Animations>
+      <Animation Duration="0:0:0.18" FillMode="Both">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
 
   <!-- ============ 设置页的二级选项卡 ============ -->

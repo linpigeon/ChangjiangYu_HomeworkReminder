@@ -17,8 +17,8 @@
     会把绑定顶掉，此后 ViewModel 侧的变化（如收起侧边栏）就到不了界面。
     所以初始宽度与收起/展开都由 TodoShellView 代码后置显式应用。
 
-    设置页与待办区常驻同一单元格，靠 pagefade 类做交叉淡入淡出（Opacity 过渡），
-    而不是 IsVisible 硬切。
+    设置页与待办区用 IsVisible 硬切保证终态正确，切换时的淡入由
+    pagefadein 关键帧动画负责（只淡入，不做淡出——见 TodoTheme.axaml 的说明）。
   -->
   <Grid x:Name="ShellGrid">
     <Grid.ColumnDefinitions>
@@ -34,7 +34,9 @@
 
     <Grid Grid.Column="2">
       <!-- 待办区：列表 + 分隔条 + 详情 -->
-      <Grid x:Name="TodoPane" Classes="pagefade" Classes.inactive="{Binding SettingsOpen}">
+      <Grid x:Name="TodoPane"
+            IsVisible="{Binding !SettingsOpen}"
+            Classes.pagefadein="{Binding !SettingsOpen}">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="400" MinWidth="220" />
           <ColumnDefinition Width="5" />
@@ -46,8 +48,9 @@
         <views:TodoDetailView Grid.Column="2" Background="{Binding SurfaceBrush}" />
       </Grid>
 
-      <!-- 设置页：与待办区同格叠加，淡入淡出切换（内嵌页面，不是弹窗） -->
-      <views:SettingsView Classes="pagefade" Classes.inactive="{Binding !SettingsOpen}" />
+      <!-- 设置页：与待办区同格叠加（内嵌页面，不是弹窗） -->
+      <views:SettingsView IsVisible="{Binding SettingsOpen}"
+                          Classes.pagefadein="{Binding SettingsOpen}" />
     </Grid>
   </Grid>
 </UserControl>

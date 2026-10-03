@@ -10,7 +10,7 @@
   <!--
     设置页（主界面内嵌，不再是浮层/小窗口）。
     桌面：占三栏布局的中右两栏；手机：由宿主加返回键全屏覆盖。
-    页内分「设置 / 关于」两个二级选项卡，同一页面内交叉淡入淡出切换。
+    页内分「设置 / 关于」两个二级选项卡，IsVisible 切换 + 淡入动画。
     桌面专属项（关闭行为、桌面小组件）在 Android 上隐藏。
 
     背景用不透明的 TodoDialogBackground（而不是半透明的 ListBrush）：
@@ -31,11 +31,12 @@
                 Content="关于" Click="OnShowAboutTabClick" />
       </StackPanel>
 
-      <!-- 选项卡内容：两页同格叠加，pagefade 淡入淡出 -->
+      <!-- 选项卡内容：IsVisible 硬切 + pagefadein 淡入 -->
       <Grid Grid.Row="2" Margin="26,8,26,22">
 
         <!-- 设置 -->
-        <ScrollViewer Classes="pagefade" Classes.inactive="{Binding AboutTabOpen}"
+        <ScrollViewer IsVisible="{Binding !AboutTabOpen}"
+                      Classes.pagefadein="{Binding !AboutTabOpen}"
                       HorizontalScrollBarVisibility="Disabled">
           <StackPanel MaxWidth="520" Spacing="22">
 
@@ -116,7 +117,8 @@
         </ScrollViewer>
 
         <!-- 关于 -->
-        <ScrollViewer Classes="pagefade" Classes.inactive="{Binding !AboutTabOpen}"
+        <ScrollViewer IsVisible="{Binding AboutTabOpen}"
+                      Classes.pagefadein="{Binding AboutTabOpen}"
                       HorizontalScrollBarVisibility="Disabled">
           <StackPanel MaxWidth="520" Spacing="12">
             <StackPanel Spacing="2">
