@@ -1538,12 +1538,28 @@ public sealed partial class MainViewModel : ViewModelBase
         ? "在雨课堂 App 中打开（未安装则回落浏览器）"
         : "在浏览器中打开：作业直达答题页，公告落到课程日志页";
 
+    /// <summary>应用内 WebView 打开的答题页地址（Android；null = 不显示 WebView 页）。</summary>
+    [ObservableProperty]
+    private string? _examWebUrl;
+
+    /// <summary>关闭应用内答题页。</summary>
+    public void CloseExamWeb() => ExamWebUrl = null;
+
     /// <summary>在系统浏览器中打开雨课堂原页面。</summary>
     public void OpenSource(TodoItemViewModel item)
     {
         // 优先用同步时生成的链接；缺失时按课程回落到课程日志页。
         var url = item.SourceUrl
                   ?? YktUrls.CourseLog(item.ClassroomId, _session?.UniversityId ?? AppSettings.Current.UniversityId);
+
+        // Android：试卷类作业在应用内 WebView 打开移动答题页（cookie 全局共享、
+        // 直接带着登录态），比拉起雨课堂 App 首页的体验好得多。
+        if (OperatingSystem.IsAndroid() && TryBuildMobileExamUrl(url) is { } mobileUrl)
+        {
+            ExamWebUrl = mobileUrl;
+            return;
+        }
+
         // 打开 URL 是平台相关操作，转发给平台头注入的实现（Desktop 用 Process.Start），
         // 共享项目不直接依赖平台 API；实现内部自行吞掉异常。
         // Android 优先拉起雨课堂 App（未安装则回落浏览器）。
@@ -1551,6 +1567,17 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             if (!ps.OpenInYktApp(url)) ps.OpenUrl(url);
         }
+    }
+
+    /// <summary>
+    /// 能在应用内 WebView 打开的 v2 web 页面（试卷 / 章节作业答题页）：同域 cookie
+    /// 直接可用。不是这类链接时返回 null（走拉起雨课堂 App / 浏览器）。
+    /// 注意不能换成 changjiang-exam 的旧考试系统地址：它是独立 token 会话（401）。
+    /// </summary>
+    private static string? TryBuildMobileExamUrl(string url)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(url, @"/v2/web/(exam|exercise)/");
+        return m.Success ? url : null;
     }
 
     /// <summary>

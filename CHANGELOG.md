@@ -40,6 +40,11 @@
   （`app://yuketang` 深链，试卷类作业附带 classroomId/examId 路由参数——当前版本
   雨课堂只解析不跳转、落在首页，参数为前向兼容保留）；未安装雨课堂时回落浏览器。
   顺带修复了 Android 上「打开」按钮原本无反应的问题（PlatformServices 未注入）
+- **Android：试卷/章节作业在应用内打开答题页**：点「打开」不再跳出去——在应用内
+  WebView 直接加载 v2 web 的考试封面/答题页（同域 cookie 自带登录态），自动把
+  桌面布局缩放适配手机屏幕。实测：考试封面、开始答题确认框、返回链路全部可用。
+  （雨课堂 App 经全面逆向验证没有开放页级深链，见 commit 209c275 的说明；
+  `changjiang-exam` 旧考试系统是独立 token 会话，session cookie 走不通）
 
 ### 修复
 
