@@ -177,17 +177,17 @@
                            Foreground="{DynamicResource TodoTextSecondary}" />
                 <TextBox Grid.Row="0" Grid.Column="1" MaxWidth="260" HorizontalAlignment="Left"
                          Text="{Binding ProfileNameInput, Mode=TwoWay}"
-                         Watermark="侧栏显示的名字" />
+                         PlaceholderText="侧栏显示的名字" />
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="学校·学号" FontSize="13" VerticalAlignment="Center"
                            Foreground="{DynamicResource TodoTextSecondary}" />
                 <TextBox Grid.Row="1" Grid.Column="1" MaxWidth="260" HorizontalAlignment="Left"
                          Text="{Binding ProfileSubtitleInput, Mode=TwoWay}"
-                         Watermark="例如：珠海科技学院 · 03251508" />
+                         PlaceholderText="例如：珠海科技学院 · 03251508" />
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="头像地址" FontSize="13" VerticalAlignment="Center"
                            Foreground="{DynamicResource TodoTextSecondary}" />
                 <TextBox Grid.Row="2" Grid.Column="1" MaxWidth="260" HorizontalAlignment="Left"
                          Text="{Binding ProfileAvatarInput, Mode=TwoWay}"
-                         Watermark="http(s) 图片链接或本地路径，留空用首字" />
+                         PlaceholderText="http(s) 图片链接或本地路径，留空用首字" />
               </Grid>
               <Button Classes="outline" Content="保存个人信息" Padding="10,5" FontSize="12"
                       HorizontalAlignment="Left" Click="OnSaveProfileClick" />

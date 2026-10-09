@@ -152,15 +152,22 @@ public sealed partial class MainViewModel : ViewModelBase
         try
         {
             var api = _api;
-            if (api is null) return null;
+            if (api is null && _chaoxingCookie is null) return null;
 
             // 网络与解析放后台线程，与 RefreshAsync 保持一致。
             var (result, localState) = await Task.Run(async () =>
             {
-                var r = await new SyncService(api).SyncAsync(_cacheFile, null, ct).ConfigureAwait(false);
+                var r = api is not null
+                    ? await new SyncService(api).SyncAsync(_cacheFile, null, ct).ConfigureAwait(false)
+                    : new SyncResult();
                 var ls = await _localStateStore.LoadAsync(ct).ConfigureAwait(false);
                 return (r, ls);
             }, ct).ConfigureAwait(false);
+
+            // 学习通同步（已登录时）。
+            var cxWarnings = new List<string>();
+            var cxItems = await SyncChaoxingAsync(cxWarnings, ct).ConfigureAwait(false);
+            result = MergeChaoxing(result, cxItems, cxWarnings);
 
             ct.ThrowIfCancellationRequested();
 
@@ -569,6 +576,9 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private readonly ChaoxingSessionStore _chaoxingStore = new();
 
+    /// <summary>当前学习通会话的整条 Cookie（同步用）。null = 未登录。</summary>
+    private string? _chaoxingCookie;
+
     [ObservableProperty]
     private string _chaoxingStatusText = "未登录";
 
@@ -580,15 +590,19 @@ public sealed partial class MainViewModel : ViewModelBase
     public async Task AdoptChaoxingSessionAsync(ChaoxingSessionFile session)
     {
         await _chaoxingStore.SaveAsync(session).ConfigureAwait(true);
+        _chaoxingCookie = session.CookieHeader;
         HasChaoxingSession = true;
         ChaoxingStatusText = $"已登录（uid {session.Uid} · {session.SavedAt:MM-dd HH:mm}）";
         LoginPageOpen = null;
+        // 登录成功顺手同步一次，让学习通作业立刻出现在列表里。
+        await RefreshAsync().ConfigureAwait(true);
     }
 
     /// <summary>退出学习通：清本地会话文件，并尽力清掉 WebView 里的 chaoxing Cookie。</summary>
     public async void LogoutChaoxing()
     {
         await _chaoxingStore.ClearAsync().ConfigureAwait(true);
+        _chaoxingCookie = null;
         HasChaoxingSession = false;
         ChaoxingStatusText = "未登录";
 
@@ -602,9 +616,58 @@ public sealed partial class MainViewModel : ViewModelBase
         var saved = await _chaoxingStore.LoadAsync().ConfigureAwait(true);
         if (saved is { HasValue: true })
         {
+            _chaoxingCookie = saved.CookieHeader;
             HasChaoxingSession = true;
             ChaoxingStatusText = $"已登录（uid {saved.Uid} · {saved.SavedAt:MM-dd HH:mm}）";
         }
+    }
+
+    /// <summary>
+    /// 同步学习通的作业与考试。未登录返回空列表；失败时把原因写进 warnings
+    /// 并在状态行/设置页提示（登录态失效时要求重新登录）。
+    /// </summary>
+    private async Task<List<TodoItem>> SyncChaoxingAsync(ICollection<string> warnings, CancellationToken ct)
+    {
+        if (_chaoxingCookie is null) return [];
+        try
+        {
+            var items = await ChaoxingSyncService.SyncAsync(_chaoxingCookie, ct).ConfigureAwait(false);
+            return items.ToList();
+        }
+        catch (ChaoxingAuthExpiredException)
+        {
+            _chaoxingCookie = null;
+            HasChaoxingSession = false;
+            ChaoxingStatusText = "登录已过期，请到 设置 → 账号 重新登录";
+            warnings.Add("学习通登录态已失效，请重新登录。");
+            return [];
+        }
+        catch (ChaoxingApiException ex)
+        {
+            warnings.Add($"学习通同步失败：{ex.Message}");
+            return [];
+        }
+    }
+
+    /// <summary>把学习通条目与其告警合并进同步结果（没有条目也没有告警时原样返回）。</summary>
+    private static SyncResult MergeChaoxing(SyncResult result, IReadOnlyList<TodoItem> cxItems, IReadOnlyList<string> extraWarnings)
+    {
+        if (cxItems.Count == 0 && extraWarnings.Count == 0) return result;
+        return new SyncResult
+        {
+            Homework = result.Homework.Concat(cxItems).ToList(),
+            HomeworkForCache = result.HomeworkForCache.Concat(cxItems).ToList(),
+            Announcements = result.Announcements,
+            CourseCount = result.CourseCount,
+            ActivityCount = result.ActivityCount,
+            UnreadNotificationCount = result.UnreadNotificationCount,
+            SyncedAt = result.SyncedAt,
+            Warnings = result.Warnings.Concat(extraWarnings).ToList(),
+            CourseSignatures = result.CourseSignatures,
+            CourseFullSyncedAt = result.CourseFullSyncedAt,
+            ReusedCourses = result.ReusedCourses,
+            ArchivedCourses = result.ArchivedCourses,
+        };
     }
 
     // ---------------- 个人信息（设置页手动填写） ----------------
@@ -1279,9 +1342,9 @@ public sealed partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        if (_api is null)
+        if (_api is null && _chaoxingCookie is null)
         {
-            // 未登录时刷新按钮无意义：状态栏提示去设置页登录。
+            // 两个账号都没登录时刷新按钮无意义：状态栏提示去设置页登录。
             State = AppState.Ready;
             SyncStatus = "未登录雨课堂，请到 设置 → 账号 登录";
             return;
@@ -1317,10 +1380,24 @@ public sealed partial class MainViewModel : ViewModelBase
             var api = _api;
             var (result, localState) = await Task.Run(async () =>
             {
-                var r = await new SyncService(api).SyncAsync(_cacheFile, progress, ct).ConfigureAwait(false);
+                SyncResult r;
+                if (api is not null)
+                {
+                    r = await new SyncService(api).SyncAsync(_cacheFile, progress, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    // 只登录了学习通：雨课堂部分直接给空结果。
+                    r = new SyncResult();
+                }
                 var ls = await _localStateStore.LoadAsync(ct).ConfigureAwait(false);
                 return (r, ls);
             }, ct).ConfigureAwait(true);
+
+            // 学习通同步（已登录时）。失败降级为警告，不影响雨课堂结果。
+            var cxWarnings = new List<string>();
+            var cxItems = await SyncChaoxingAsync(cxWarnings, ct).ConfigureAwait(true);
+            result = MergeChaoxing(result, cxItems, cxWarnings);
 
             ct.ThrowIfCancellationRequested();
 
@@ -1629,14 +1706,18 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 能在应用内 WebView 打开的 v2 web 页面（试卷 / 章节作业答题页）：同域 cookie
-    /// 直接可用。不是这类链接时返回 null（走拉起雨课堂 App / 浏览器）。
+    /// 能在应用内 WebView 打开的页面：v2 web 的试卷/章节作业（同域 cookie），
+    /// 以及学习通的作业/考试页（WebView 与登录页共享 cookie 存储）。
+    /// 不是这类链接时返回 null（走拉起雨课堂 App / 浏览器）。
     /// 注意不能换成 changjiang-exam 的旧考试系统地址：它是独立 token 会话（401）。
     /// </summary>
     private static string? TryBuildMobileExamUrl(string url)
     {
-        var m = System.Text.RegularExpressions.Regex.Match(url, @"/v2/web/(exam|exercise)/");
-        return m.Success ? url : null;
+        if (System.Text.RegularExpressions.Regex.IsMatch(url, @"/v2/web/(exam|exercise)/"))
+            return url;
+        if (url.Contains("chaoxing.com", StringComparison.OrdinalIgnoreCase))
+            return url;
+        return null;
     }
 
     /// <summary>
