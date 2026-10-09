@@ -83,4 +83,10 @@ public partial class TodoListView : UserControl
         var item = (sender as Control)?.DataContext as TodoItemViewModel ?? vm.SelectedItem;
         if (item is not null) vm.OpenSource(item);
     }
+
+    /// <summary>「去登录」：打开设置页的账号选项卡。</summary>
+    private void OnGoLoginClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.OpenAccountSettings();
+    }
 }

@@ -52,5 +52,25 @@
       <views:SettingsView IsVisible="{Binding SettingsOpen}"
                           Classes.pagefadein="{Binding SettingsOpen}" />
     </Grid>
+
+    <!-- 登录覆盖层（雨课堂 / 学习通，从设置页「账号」进入；启动不再弹登录） -->
+    <Border Grid.Column="2" Background="{DynamicResource TodoDialogBackground}"
+            IsVisible="{Binding LoginPageOpen, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid RowDefinitions="Auto,*">
+        <Button Grid.Row="0" Classes="tool" Click="OnLoginBackClick"
+                Margin="10,10,0,0" HorizontalAlignment="Left"
+                ToolTip.Tip="返回设置">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Classes="icon" Text="&#xF060;" />
+            <TextBlock Text="返回" FontSize="13" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TodoTextSecondary}" />
+          </StackPanel>
+        </Button>
+        <Panel Grid.Row="1">
+          <views:LoginView IsVisible="{Binding YktLoginOpen}" />
+          <views:ChaoxingLoginView IsVisible="{Binding ChaoxingLoginOpen}" />
+        </Panel>
+      </Grid>
+    </Border>
   </Grid>
 </UserControl>

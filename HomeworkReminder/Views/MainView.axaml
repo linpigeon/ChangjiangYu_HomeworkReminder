@@ -17,7 +17,6 @@
     <Image Source="{Binding WallpaperImage}" Stretch="UniformToFill"
            IsVisible="{Binding HasWallpaper}" />
     <Border Background="{Binding VeilBrush}" Opacity="{Binding VeilOpacity}" />
-    <ContentControl Name="ShellHost" IsVisible="{Binding ShowContent}" />
-    <views:LoginView IsVisible="{Binding ShowLogin}" />
+    <ContentControl Name="ShellHost" />
   </Panel>
 </UserControl>

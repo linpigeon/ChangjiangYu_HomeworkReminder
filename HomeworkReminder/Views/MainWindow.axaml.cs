@@ -7,12 +7,7 @@ using HomeworkReminder.ViewModels;
 namespace HomeworkReminder.Views;
 
 /// <summary>
-/// 应用主窗口：根据登录状态切换主界面与登录页。
-/// <para>
-/// 登录态下窗口收缩到刚好容下二维码卡片的紧凑尺寸并禁止拉伸，
-/// 避免 WebView 页面在过大视口里露出大片空白；进入主界面后恢复
-/// 正常尺寸与可拉伸行为（与 XAML 中声明的默认尺寸一致）。
-/// </para>
+/// 应用主窗口。启动即进主界面（雨课堂登录已迁入设置页）。
 /// <para>
 /// 点「关闭」的行为由设置决定（设置页可改）：默认最小化到系统托盘继续运行
 /// （<see cref="Hide"/> 后窗口从任务栏消失，只剩托盘图标），也可选直接退出程序。
@@ -20,10 +15,6 @@ namespace HomeworkReminder.Views;
 /// </summary>
 public partial class MainWindow : Window
 {
-    /// <summary>登录页紧凑尺寸。</summary>
-    private const double LoginWidth = 480;
-    private const double LoginHeight = 700;
-
     /// <summary>主界面尺寸，与 MainWindow.axaml 中的声明保持一致。</summary>
     private const double MainWidth = 1180;
     private const double MainHeight = 760;
@@ -84,7 +75,6 @@ public partial class MainWindow : Window
     {
         if (_vm is not null)
         {
-            _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.Synced -= OnSynced;
             _vm.WidgetVisibilityRequested -= OnWidgetVisibilityRequested;
         }
@@ -92,43 +82,10 @@ public partial class MainWindow : Window
         _vm = vm;
         if (_vm is null) return;
 
-        _vm.PropertyChanged += OnVmPropertyChanged;
         _vm.Synced += OnSynced;
         _vm.WidgetVisibilityRequested += OnWidgetVisibilityRequested;
 
-        ApplyMode(_vm.ShowLogin);
         SyncWidgetWithSetting();
-    }
-
-    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(MainViewModel.ShowLogin) && _vm is not null)
-            ApplyMode(_vm.ShowLogin);
-    }
-
-    /// <summary>
-    /// 登录页用紧凑尺寸（贴合二维码卡片），主界面恢复可拉伸的正常尺寸。
-    /// </summary>
-    private void ApplyMode(bool isLogin)
-    {
-        if (isLogin)
-        {
-            CanResize = false;
-            MinWidth = LoginWidth;
-            MinHeight = LoginHeight;
-            Width = LoginWidth;
-            Height = LoginHeight;
-        }
-        else
-        {
-            // 恢复主界面的正常尺寸与可拉伸行为。
-            CanResize = true;
-            MinWidth = MainMinWidth;
-            MinHeight = MainMinHeight;
-            Width = MainWidth;
-            Height = MainHeight;
-            CenterOnScreen();
-        }
     }
 
     /// <summary>同步完成后刷新小组件内容（数据复用主界面缓存，不额外请求）。</summary>
@@ -161,20 +118,4 @@ public partial class MainWindow : Window
 
     /// <summary>窗口真正退出前收尾（保存小组件位置，避免把「隐藏」误写回设置）。</summary>
     public void PrepareForShutdown() => _widget?.PersistPositionForShutdown();
-
-    /// <summary>
-    /// 登录成功后窗口从紧凑尺寸放大到主界面尺寸，
-    /// 若不重新居中会以左上角为锚点膨胀到屏幕外，因此按工作区重新居中。
-    /// </summary>
-    private void CenterOnScreen()
-    {
-        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
-        if (screen is null) return;
-        var scaling = RenderScaling;
-        if (scaling <= 0) scaling = 1;
-        var area = screen.WorkingArea;
-        Position = new Avalonia.PixelPoint(
-            area.X + (int)((area.Width - Width * scaling) / 2),
-            area.Y + (int)((area.Height - Height * scaling) / 2));
-    }
 }

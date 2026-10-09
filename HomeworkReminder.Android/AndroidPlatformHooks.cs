@@ -16,6 +16,27 @@ internal static class AndroidPlatformHooks
     {
         YktLoginService.SessionReaderOverride = ReadSession;
         YktLoginService.CookieClearOverride = ClearCookies;
+
+        // 学习通：Avalonia 的 CookieManager 抽象在 Android 不可用，走原生 CookieManager。
+        ChaoxingLoginService.CookieReaderOverride = ReadChaoxingCookie;
+        ChaoxingLoginService.CookieClearOverride = ClearChaoxingCookies;
+    }
+
+    /// <summary>读出 chaoxing.com 域的整条 Cookie（含 HttpOnly）。</summary>
+    private static Task<string?> ReadChaoxingCookie()
+        => Task.FromResult(global::Android.Webkit.CookieManager.Instance?.GetCookie("https://i.chaoxing.com"));
+
+    /// <summary>
+    /// 原生 CookieManager 没有按域删除：给超星常见的会话 cookie 写过期值使其失效
+    /// （全清会误伤同库存放的雨课堂登录态）。
+    /// </summary>
+    private static Task ClearChaoxingCookies()
+    {
+        var cm = global::Android.Webkit.CookieManager.Instance;
+        foreach (var name in new[] { "_uid", "vc3", "uf", "fid", "dsc", "ll", "lv", "_d" })
+            cm?.SetCookie("https://i.chaoxing.com", $"{name}=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+        cm?.Flush();
+        return Task.CompletedTask;
     }
 
     /// <summary>从原生 Cookie 存储读出 sessionid / csrftoken。</summary>

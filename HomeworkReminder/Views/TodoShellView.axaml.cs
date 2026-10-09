@@ -54,4 +54,10 @@ public partial class TodoShellView : UserControl
     {
         _vm?.PersistPaneWidths(SidebarCol.Width, ListCol.Width);
     }
+
+    /// <summary>登录覆盖层的返回键。</summary>
+    private void OnLoginBackClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        _vm?.CloseLoginPage();
+    }
 }

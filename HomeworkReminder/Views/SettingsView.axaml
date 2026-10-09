@@ -25,9 +25,11 @@
 
       <!-- 二级选项卡 -->
       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" Margin="26,10,26,0">
-        <Button Classes="settab" Classes.active="{Binding !AboutTabOpen}"
+        <Button Classes="settab" Classes.active="{Binding SettingsTab0Active}"
                 Content="设置" Click="OnShowSettingsTabClick" />
-        <Button Classes="settab" Classes.active="{Binding AboutTabOpen}"
+        <Button Classes="settab" Classes.active="{Binding SettingsTab1Active}"
+                Content="账号" Click="OnShowAccountTabClick" />
+        <Button Classes="settab" Classes.active="{Binding SettingsTab2Active}"
                 Content="关于" Click="OnShowAboutTabClick" />
       </StackPanel>
 
@@ -35,8 +37,8 @@
       <Grid Grid.Row="2" Margin="26,8,26,22">
 
         <!-- 设置 -->
-        <ScrollViewer x:Name="SettingsTabScroller" IsVisible="{Binding !AboutTabOpen}"
-                      Classes.pagefadein="{Binding !AboutTabOpen}"
+        <ScrollViewer x:Name="SettingsTabScroller" IsVisible="{Binding SettingsTab0Active}"
+                      Classes.pagefadein="{Binding SettingsTab0Active}"
                       HorizontalScrollBarVisibility="Disabled">
           <StackPanel HorizontalAlignment="Left" Spacing="22"
                       MaxWidth="{Binding Bounds.Width, ElementName=SettingsTabScroller}">
@@ -159,9 +161,80 @@
           </StackPanel>
         </ScrollViewer>
 
+        <!-- 账号 -->
+        <ScrollViewer x:Name="AccountTabScroller" IsVisible="{Binding SettingsTab1Active}"
+                      Classes.pagefadein="{Binding SettingsTab1Active}"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel HorizontalAlignment="Left" Spacing="22"
+                      MaxWidth="{Binding Bounds.Width, ElementName=AccountTabScroller}">
+
+            <!-- 个人信息（手动填写，不再从雨课堂拉取） -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="个人信息" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="姓名" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <TextBox Grid.Row="0" Grid.Column="1" MaxWidth="260" HorizontalAlignment="Left"
+                         Text="{Binding ProfileNameInput, Mode=TwoWay}"
+                         Watermark="侧栏显示的名字" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="学校·学号" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <TextBox Grid.Row="1" Grid.Column="1" MaxWidth="260" HorizontalAlignment="Left"
+                         Text="{Binding ProfileSubtitleInput, Mode=TwoWay}"
+                         Watermark="例如：珠海科技学院 · 03251508" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="头像地址" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <TextBox Grid.Row="2" Grid.Column="1" MaxWidth="260" HorizontalAlignment="Left"
+                         Text="{Binding ProfileAvatarInput, Mode=TwoWay}"
+                         Watermark="http(s) 图片链接或本地路径，留空用首字" />
+              </Grid>
+              <Button Classes="outline" Content="保存个人信息" Padding="10,5" FontSize="12"
+                      HorizontalAlignment="Left" Click="OnSaveProfileClick" />
+            </StackPanel>
+
+            <!-- 雨课堂 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="雨课堂（长江雨课堂）" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <TextBlock Text="{Binding LoginStatusText}" FontSize="12" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextSecondary}" />
+              <TextBlock Text="{Binding LogoutCookieReport}" FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         IsVisible="{Binding LogoutCookieReport, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="outline" Content="扫码登录 / 重新登录" Padding="10,5" FontSize="12"
+                        Click="OnYktLoginClick" />
+                <Button Classes="tool" Content="退出登录" Padding="10,5" FontSize="12"
+                        Click="OnYktLogoutClick"
+                        IsVisible="{Binding !NoYktAccount}" />
+              </StackPanel>
+            </StackPanel>
+
+            <!-- 学习通 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="学习通（超星）" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <TextBlock Text="{Binding ChaoxingStatusText}" FontSize="12" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextSecondary}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="outline" Content="登录学习通" Padding="10,5" FontSize="12"
+                        Click="OnChaoxingLoginClick" />
+                <Button Classes="tool" Content="退出" Padding="10,5" FontSize="12"
+                        Click="OnChaoxingLogoutClick"
+                        IsVisible="{Binding HasChaoxingSession}" />
+              </StackPanel>
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         Text="学习通目前只做登录态管理，作业同步将在后续版本提供。" />
+            </StackPanel>
+
+          </StackPanel>
+        </ScrollViewer>
+
         <!-- 关于 -->
-        <ScrollViewer x:Name="AboutTabScroller" IsVisible="{Binding AboutTabOpen}"
-                      Classes.pagefadein="{Binding AboutTabOpen}"
+        <ScrollViewer x:Name="AboutTabScroller" IsVisible="{Binding SettingsTab2Active}"
+                      Classes.pagefadein="{Binding SettingsTab2Active}"
                       HorizontalScrollBarVisibility="Disabled">
           <StackPanel HorizontalAlignment="Left" Spacing="22"
                       MaxWidth="{Binding Bounds.Width, ElementName=AboutTabScroller}">

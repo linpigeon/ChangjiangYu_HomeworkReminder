@@ -54,6 +54,33 @@
           </StackPanel>
         </Border>
 
+        <!-- 登录态失效（保留已缓存的列表，引导去设置页重新登录） -->
+        <Border IsVisible="{Binding AuthWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Background="{DynamicResource TodoWarningBackground}"
+                BorderBrush="{DynamicResource TodoWarningBorder}" BorderThickness="1"
+                CornerRadius="4" Padding="10,8">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="{Binding AuthWarning}" FontSize="12" TextWrapping="Wrap"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TodoTextPrimary}" />
+            <Button Classes="outline" Content="去登录" Padding="8,3" FontSize="11"
+                    VerticalAlignment="Center" Click="OnGoLoginClick" />
+          </StackPanel>
+        </Border>
+
+        <!-- 未登录引导（启动即进主界面后，列表是空的，登录入口在设置页） -->
+        <Border IsVisible="{Binding NoYktAccount}"
+                Background="{DynamicResource TodoAccentSoft}"
+                CornerRadius="4" Padding="10,8">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="还没有雨课堂账号，登录后这里才会显示作业" FontSize="12"
+                       TextWrapping="Wrap" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TodoTextPrimary}" />
+            <Button Classes="outline" Content="去登录" Padding="8,3" FontSize="11"
+                    VerticalAlignment="Center" Click="OnGoLoginClick" />
+          </StackPanel>
+        </Border>
+
         <CheckBox Classes="todo" Content="隐藏已勾选" FontSize="11"
                   Foreground="{DynamicResource TodoTextSecondary}"
                   IsChecked="{Binding List.HideLocallyDone}"

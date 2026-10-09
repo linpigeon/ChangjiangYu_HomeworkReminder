@@ -155,25 +155,18 @@ public sealed partial class MainViewModel : ViewModelBase
             if (api is null) return null;
 
             // 网络与解析放后台线程，与 RefreshAsync 保持一致。
-            var (result, localState, profile) = await Task.Run(async () =>
+            var (result, localState) = await Task.Run(async () =>
             {
                 var r = await new SyncService(api).SyncAsync(_cacheFile, null, ct).ConfigureAwait(false);
                 var ls = await _localStateStore.LoadAsync(ct).ConfigureAwait(false);
-                YktUserProfile? p = null;
-                try
-                {
-                    p = await api.GetUserProfileAsync(ct).ConfigureAwait(false);
-                }
-                catch (YktAuthExpiredException) { throw; }
-                catch (YktApiException) { /* 展示信息，失败无妨 */ }
-                return (r, ls, p);
+                return (r, ls);
             }, ct).ConfigureAwait(false);
 
             ct.ThrowIfCancellationRequested();
 
             // ApplySyncResult 必须在 UI 线程执行（清空/填充 ObservableCollection、触发 Synced）。
             // 自动同步循环跑在线程池上、没有同步上下文可回，必须显式派发到 UI 线程。
-            await Dispatcher.UIThread.InvokeAsync(() => ApplySyncResult(result, localState, profile));
+            await Dispatcher.UIThread.InvokeAsync(() => ApplySyncResult(result, localState));
 
             return result;
         }
@@ -182,11 +175,11 @@ public sealed partial class MainViewModel : ViewModelBase
             // 与手动同步一致：登录态失效必须浮到界面，而不是只在循环日志里空转。
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                State = AppState.Error;
-                ErrorMessage = "登录态已失效，请重新扫码登录。";
                 LoginStatusText = "登录已过期";
+                AuthWarning = "雨课堂登录态已失效，请到 设置 → 账号 重新登录。";
                 _api?.Dispose();
                 _api = null;
+                NotifyAccountChanged();
             });
             // 停掉自动同步。不能在循环里 await StopAsync（它会等待循环自己），
             // 火忘即可：令牌取消后循环本轮抛出、不再进入下一轮。
@@ -526,14 +519,119 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private bool _showCookieInput;
 
-    /// <summary>登录页是否可见。</summary>
-    public bool ShowLogin => State is AppState.NeedsLogin or AppState.Error;
-
     /// <summary>
-    /// 主内容是否可见。同步中也算「已进入主界面」，否则登录成功后到同步完成之间
-    /// 会出现一段空白（登录页已隐藏、主界面还没显示），看起来像卡住。
+    /// 登录覆盖层当前打开的账号类型："ykt"（雨课堂）/ "chaoxing"（学习通）/ null（关闭）。
+    /// 登录不再是启动门禁，而是从设置页进入的覆盖页。
     /// </summary>
-    public bool ShowContent => State is AppState.Syncing or AppState.Ready;
+    [ObservableProperty]
+    private string? _loginPageOpen;
+
+    /// <summary>雨课堂登录覆盖层是否打开。</summary>
+    public bool YktLoginOpen => LoginPageOpen == "ykt";
+
+    /// <summary>学习通登录覆盖层是否打开。</summary>
+    public bool ChaoxingLoginOpen => LoginPageOpen == "chaoxing";
+
+    partial void OnLoginPageOpenChanged(string? value)
+    {
+        OnPropertyChanged(nameof(YktLoginOpen));
+        OnPropertyChanged(nameof(ChaoxingLoginOpen));
+    }
+
+    /// <summary>打开雨课堂登录页（设置页「账号」）。</summary>
+    public void OpenYktLogin() => LoginPageOpen = "ykt";
+
+    /// <summary>打开学习通登录页。</summary>
+    public void OpenChaoxingLogin() => LoginPageOpen = "chaoxing";
+
+    /// <summary>关闭登录覆盖层。</summary>
+    public void CloseLoginPage() => LoginPageOpen = null;
+
+    /// <summary>雨课堂登录态失效时的提示（列表顶部横幅）。</summary>
+    [ObservableProperty]
+    private string _authWarning = string.Empty;
+
+    /// <summary>是否还没有雨课堂账号（列表显示「去登录」引导）。</summary>
+    public bool NoYktAccount => _api is null;
+
+    /// <summary>会话/API 实例变化后刷新「去登录」引导的可见性。</summary>
+    private void NotifyAccountChanged() => OnPropertyChanged(nameof(NoYktAccount));
+
+    /// <summary>打开设置页并切到「账号」选项卡。</summary>
+    public void OpenAccountSettings()
+    {
+        SettingsTabIndex = 1;
+        SettingsOpen = true;
+        DrawerOpen = false;
+    }
+
+    // ---------------- 学习通（超星） ----------------
+
+    private readonly ChaoxingSessionStore _chaoxingStore = new();
+
+    [ObservableProperty]
+    private string _chaoxingStatusText = "未登录";
+
+    /// <summary>是否已有学习通登录态。</summary>
+    [ObservableProperty]
+    private bool _hasChaoxingSession;
+
+    /// <summary>登录成功：保存学习通会话并关闭登录覆盖层。</summary>
+    public async Task AdoptChaoxingSessionAsync(ChaoxingSessionFile session)
+    {
+        await _chaoxingStore.SaveAsync(session).ConfigureAwait(true);
+        HasChaoxingSession = true;
+        ChaoxingStatusText = $"已登录（uid {session.Uid} · {session.SavedAt:MM-dd HH:mm}）";
+        LoginPageOpen = null;
+    }
+
+    /// <summary>退出学习通：清本地会话文件，并尽力清掉 WebView 里的 chaoxing Cookie。</summary>
+    public async void LogoutChaoxing()
+    {
+        await _chaoxingStore.ClearAsync().ConfigureAwait(true);
+        HasChaoxingSession = false;
+        ChaoxingStatusText = "未登录";
+
+        if (WebViewAccessor?.Invoke() is { } webView)
+            await ChaoxingLoginService.ClearCookiesAsync(webView).ConfigureAwait(true);
+    }
+
+    /// <summary>启动时恢复学习通登录态的状态行。</summary>
+    private async Task RestoreChaoxingAsync()
+    {
+        var saved = await _chaoxingStore.LoadAsync().ConfigureAwait(true);
+        if (saved is { HasValue: true })
+        {
+            HasChaoxingSession = true;
+            ChaoxingStatusText = $"已登录（uid {saved.Uid} · {saved.SavedAt:MM-dd HH:mm}）";
+        }
+    }
+
+    // ---------------- 个人信息（设置页手动填写） ----------------
+
+    [ObservableProperty]
+    private string _profileNameInput = AppSettings.Current.CustomUserName ?? string.Empty;
+
+    [ObservableProperty]
+    private string _profileSubtitleInput = AppSettings.Current.CustomUserSubtitle ?? string.Empty;
+
+    [ObservableProperty]
+    private string _profileAvatarInput = AppSettings.Current.CustomAvatarUrl ?? string.Empty;
+
+    /// <summary>保存手动填写的个人信息并立即刷新侧栏显示。</summary>
+    public void SaveProfile()
+    {
+        static string? Norm(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        AppSettings.Current.CustomUserName = Norm(ProfileNameInput);
+        AppSettings.Current.CustomUserSubtitle = Norm(ProfileSubtitleInput);
+        AppSettings.Current.CustomAvatarUrl = Norm(ProfileAvatarInput);
+        AppSettings.Current.Save();
+        ApplyCustomProfile();
+        SyncStatus = "个人信息已保存";
+    }
+
+    /// <summary>主内容是否可见。启动即进主界面（登录已迁入设置页），恒为 true。</summary>
+    public bool ShowContent => true;
 
     /// <summary>当前列表的标题，用于中间栏顶部。</summary>
     public string ListTitle => SelectedNav?.Label ?? "待办";
@@ -561,10 +659,15 @@ public sealed partial class MainViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
+        // 个人信息展示一律来自设置页的手动填写。
+        ApplyCustomProfile();
+        _ = RestoreChaoxingAsync();
+
         if (App.ForceLoginPage)
         {
-            State = AppState.NeedsLogin;
-            LoginStatusText = "尚未登录，请扫码";
+            // 自检模式：直接打开雨课堂登录覆盖层。
+            State = AppState.Ready;
+            LoginPageOpen = "ykt";
             return;
         }
 
@@ -579,13 +682,11 @@ public sealed partial class MainViewModel : ViewModelBase
 
             _session = saved.ToSession();
             _api = new YktApiClient(_session);
+            NotifyAccountChanged();
             State = AppState.Syncing;
-            LoginStatusText = $"已登录 · sessionid …{Tail(_session.SessionId)}";
+            LoginStatusText = "已登录";
 
-            // 先用上次缓存的资料把界面填上，避免首屏显示占位；同步成功后会刷新。
-            ApplyCachedProfile(saved);
-
-            // 待办也先上缓存：首屏列表秒开，网络同步在后台追平。
+            // 待办先上缓存：首屏列表秒开，网络同步在后台追平。
             // 缓存加载时已做合法性校验（坏条目在 TodoCacheStore 里被丢弃）。
             _cacheFile = await _todoCacheStore.LoadAsync().ConfigureAwait(true);
             if (_cacheFile is { } cache && (cache.Homework.Count > 0 || cache.Announcements.Count > 0))
@@ -619,26 +720,14 @@ public sealed partial class MainViewModel : ViewModelBase
         }
         else
         {
-            State = AppState.NeedsLogin;
-            LoginStatusText = "尚未登录，请扫码";
-            UserName = "未登录";
-            UserSubtitle = string.Empty;
-            UserAvatarUrl = null;
-            UserAvatar = null;
+            // 没有雨课堂会话也直进主界面：列表为空，登录入口在设置页。
+            State = AppState.Ready;
+            LoginStatusText = "未登录";
         }
     }
 
-    /// <summary>用会话文件里缓存的资料填充界面。</summary>
-    private void ApplyCachedProfile(SessionFile saved)
-    {
-        UserName = string.IsNullOrWhiteSpace(saved.UserName) ? "（未获取姓名）" : saved.UserName!;
-        UserSubtitle = saved.UserSubtitle ?? string.Empty;
-        UserAvatarUrl = saved.UserAvatarUrl;
-        _ = LoadAvatarAsync(saved.UserAvatarUrl);
-    }
-
     /// <summary>
-    /// 下载并解码头像。纯展示信息，任何失败都只是回落到姓名首字。
+    /// 下载并解码头像（http(s) 链接或本地路径）。纯展示信息，任何失败都只是回落到姓名首字。
     /// </summary>
     private async Task LoadAvatarAsync(string? url)
     {
@@ -650,6 +739,12 @@ public sealed partial class MainViewModel : ViewModelBase
 
         try
         {
+            if (File.Exists(url))
+            {
+                await using var fs = File.OpenRead(url);
+                UserAvatar = new Avalonia.Media.Imaging.Bitmap(fs);
+                return;
+            }
             var bytes = await s_http.GetByteArrayAsync(url).ConfigureAwait(true);
             using var ms = new MemoryStream(bytes);
             UserAvatar = new Avalonia.Media.Imaging.Bitmap(ms);
@@ -702,11 +797,8 @@ public sealed partial class MainViewModel : ViewModelBase
 
             if (session is null)
             {
-                if (!ct.IsCancellationRequested && State != AppState.Ready)
-                {
-                    State = AppState.NeedsLogin;
+                if (!ct.IsCancellationRequested)
                     LoginStatusText = "尚未检测到登录，请扫码后重试";
-                }
                 return;
             }
 
@@ -718,8 +810,7 @@ public sealed partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            State = AppState.Error;
-            ErrorMessage = $"登录过程出错：{ex.Message}";
+            LoginStatusText = $"登录过程出错：{ex.Message}";
         }
         finally
         {
@@ -774,8 +865,7 @@ public sealed partial class MainViewModel : ViewModelBase
         }
         catch (ArgumentException ex)
         {
-            ErrorMessage = ex.Message;
-            State = AppState.Error;
+            LoginStatusText = ex.Message;
             return false;
         }
     }
@@ -803,13 +893,15 @@ public sealed partial class MainViewModel : ViewModelBase
 
         _api?.Dispose();
         _api = new YktApiClient(session);
+        NotifyAccountChanged();
 
         await _sessionStore.SaveAsync(SessionFile.From(session)).ConfigureAwait(true);
 
         ShowCookieInput = false;
         ErrorMessage = string.Empty;
+        LoginPageOpen = null; // 从设置页的登录覆盖层进来的，登录完成后收起它。
         State = AppState.Syncing;
-        LoginStatusText = $"已登录 · sessionid …{Tail(session.SessionId)}";
+        LoginStatusText = "已登录";
         await RefreshAsync().ConfigureAwait(true);
 
         // 登录成功即启动自动同步（与 InitializeAsync 恢复会话的路径一致），
@@ -982,6 +1074,7 @@ public sealed partial class MainViewModel : ViewModelBase
         };
         _api?.Dispose();
         _api = new YktApiClient(_session);
+        NotifyAccountChanged();
         await _sessionStore.SaveAsync(SessionFile.From(_session)).ConfigureAwait(true);
 
         // 清掉增量同步基准：旧学期的签名与按课全量时间戳对新学期无意义。
@@ -992,15 +1085,23 @@ public sealed partial class MainViewModel : ViewModelBase
             await AutoSync.StartAsync(AppSettings.Current.AutoRefreshMinutes).ConfigureAwait(true);
     }
 
-    /// <summary>设置页的二级选项卡：false = 设置，true = 关于。</summary>
+    /// <summary>设置页的选项卡：0 = 设置，1 = 账号，2 = 关于。</summary>
     [ObservableProperty]
-    private bool _aboutTabOpen;
+    private int _settingsTabIndex;
 
-    /// <summary>设置页切到「设置」选项卡。</summary>
-    public void ShowSettingsTab() => AboutTabOpen = false;
+    public bool SettingsTab0Active => SettingsTabIndex == 0;
+    public bool SettingsTab1Active => SettingsTabIndex == 1;
+    public bool SettingsTab2Active => SettingsTabIndex == 2;
 
-    /// <summary>设置页切到「关于」选项卡。</summary>
-    public void ShowAboutTab() => AboutTabOpen = true;
+    partial void OnSettingsTabIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(SettingsTab0Active));
+        OnPropertyChanged(nameof(SettingsTab1Active));
+        OnPropertyChanged(nameof(SettingsTab2Active));
+    }
+
+    /// <summary>切换设置页选项卡（0 = 设置，1 = 账号，2 = 关于）。</summary>
+    public void ShowSettingsTab(int index) => SettingsTabIndex = index;
 
     /// <summary>打开设置页（侧边栏齿轮按钮）。</summary>
     public void OpenSettings()
@@ -1123,6 +1224,7 @@ public sealed partial class MainViewModel : ViewModelBase
         _api?.Dispose();
         _api = null;
         _session = null;
+        NotifyAccountChanged();
         _cache.Clear();
         List.Replace([]);
         _cacheFile = null;
@@ -1147,12 +1249,9 @@ public sealed partial class MainViewModel : ViewModelBase
             LogoutCookieReport = "登录页尚未创建，未清理 WebView Cookie";
         }
 
-        State = AppState.NeedsLogin;
-        LoginStatusText = "已退出登录，请重新扫码";
-        UserName = "未登录";
-        UserSubtitle = string.Empty;
-        UserAvatarUrl = null;
-        UserAvatar = null;
+        State = AppState.Ready;
+        LoginStatusText = "未登录";
+        AuthWarning = string.Empty;
         SyncStatus = "尚未同步";
         CacheNote = string.Empty;
         StatusDetail = string.Empty;
@@ -1182,7 +1281,9 @@ public sealed partial class MainViewModel : ViewModelBase
     {
         if (_api is null)
         {
-            State = AppState.NeedsLogin;
+            // 未登录时刷新按钮无意义：状态栏提示去设置页登录。
+            State = AppState.Ready;
+            SyncStatus = "未登录雨课堂，请到 设置 → 账号 登录";
             return;
         }
 
@@ -1214,24 +1315,16 @@ public sealed partial class MainViewModel : ViewModelBase
             var progress = new Progress<string>(s => SyncStatus = s);
 
             var api = _api;
-            var (result, localState, profile) = await Task.Run(async () =>
+            var (result, localState) = await Task.Run(async () =>
             {
                 var r = await new SyncService(api).SyncAsync(_cacheFile, progress, ct).ConfigureAwait(false);
                 var ls = await _localStateStore.LoadAsync(ct).ConfigureAwait(false);
-                // 用户资料只是展示信息：单独取，失败不影响待办同步。
-                YktUserProfile? p = null;
-                try
-                {
-                    p = await api.GetUserProfileAsync(ct).ConfigureAwait(false);
-                }
-                catch (YktAuthExpiredException) { throw; }
-                catch (YktApiException) { /* 拿不到就继续用缓存或占位 */ }
-                return (r, ls, p);
+                return (r, ls);
             }, ct).ConfigureAwait(true);
 
             ct.ThrowIfCancellationRequested();
 
-            ApplySyncResult(result, localState, profile);
+            ApplySyncResult(result, localState);
 
             // 手动同步也要喂给「新作业」基线：否则启动后、首次自动同步之前
             // 手动刷出的新作业会被那次同步的「首次只建基线」静默吞掉，永远收不到通知。
@@ -1249,25 +1342,26 @@ public sealed partial class MainViewModel : ViewModelBase
             // 同步被取消/被新一轮登录取代。ObjectDisposedException 是防御网：
             // 正常路径下 WaitForSyncToStopAsync 已保证不会 Dispose 在途的 _api。
             SyncStatus = "同步已取消";
-            State = _cache.Count > 0 ? AppState.Ready : AppState.NeedsLogin;
+            State = AppState.Ready;
         }
         catch (YktAuthExpiredException)
         {
-            State = AppState.Error;
-            ErrorMessage = "登录态已失效，请重新扫码登录。";
             LoginStatusText = "登录已过期";
+            AuthWarning = "雨课堂登录态已失效，请到 设置 → 账号 重新登录。";
+            ErrorMessage = string.Empty;
             _api?.Dispose();
             _api = null;
+            NotifyAccountChanged();
         }
         catch (YktApiException ex)
         {
-            State = AppState.Error;
-            ErrorMessage = $"同步失败：{ex.Message}";
+            State = AppState.Ready;
+            SyncStatus = $"同步失败：{ex.Message}";
         }
         catch (Exception ex)
         {
-            State = AppState.Error;
-            ErrorMessage = $"发生未预期的错误：{ex.Message}";
+            State = AppState.Ready;
+            SyncStatus = $"发生未预期的错误：{ex.Message}";
         }
         finally
         {
@@ -1280,46 +1374,16 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 应用用户资料，并把登录态文案换成学校信息（比 sessionid 尾号有用得多）。
-    /// 拿到新资料时顺带写回会话文件，下次启动即可直接显示。
+    /// 用设置页手动填写的个人信息刷新侧栏显示（姓名/学校学号/头像）。
+    /// 个人信息不再从雨课堂接口拉取——接口给的头像时好时坏，学校信息也不一定准。
     /// </summary>
-    private void ApplyProfile(YktUserProfile? profile)
+    private void ApplyCustomProfile()
     {
-        if (profile is null)
-        {
-            // 没取到就保留已有内容，至少别把缓存的姓名清掉。
-            if (string.IsNullOrWhiteSpace(UserSubtitle) && _session is not null)
-                LoginStatusText = "已登录";
-            return;
-        }
-
-        UserName = profile.DisplayName;
-        UserSubtitle = profile.Subtitle;
-        UserAvatarUrl = profile.AvatarUrl;
-        _ = LoadAvatarAsync(profile.AvatarUrl);
-
-        LoginStatusText = string.IsNullOrWhiteSpace(profile.School)
-            ? "已登录"
-            : $"已登录 · {profile.School}";
-
-        _ = PersistProfileAsync(profile);
-    }
-
-    private async Task PersistProfileAsync(YktUserProfile profile)
-    {
-        if (_session is null) return;
-        try
-        {
-            var file = SessionFile.From(_session);
-            file.UserName = profile.DisplayName;
-            file.UserSubtitle = profile.Subtitle;
-            file.UserAvatarUrl = profile.AvatarUrl;
-            await _sessionStore.SaveAsync(file).ConfigureAwait(true);
-        }
-        catch (Exception)
-        {
-            // 缓存写失败不影响本次运行。
-        }
+        var s = AppSettings.Current;
+        UserName = string.IsNullOrWhiteSpace(s.CustomUserName) ? "未登录" : s.CustomUserName!;
+        UserSubtitle = s.CustomUserSubtitle ?? string.Empty;
+        UserAvatarUrl = string.IsNullOrWhiteSpace(s.CustomAvatarUrl) ? null : s.CustomAvatarUrl;
+        _ = LoadAvatarAsync(UserAvatarUrl);
     }
 
     /// <summary>
@@ -1329,11 +1393,12 @@ public sealed partial class MainViewModel : ViewModelBase
     /// （导航角标、未读徽标、警告条、统计行）。必须在 UI 线程上调用。
     /// </para>
     /// </summary>
-    private void ApplySyncResult(SyncResult result, LocalState localState, YktUserProfile? profile)
+    private void ApplySyncResult(SyncResult result, LocalState localState)
     {
         _lastResult = result;
         _localState = localState;
-        ApplyProfile(profile);
+        // 同步成功说明会话有效：清掉「登录已过期」横幅。
+        AuthWarning = string.Empty;
 
         // 落盘待办缓存：下次启动秒开列表 + 作为下次增量同步的比对基准。
         // 注意用合并前（HomeworkForCache）的列表：合并会丢课堂归属，被并掉的课程下次无法增量复用。
@@ -1505,12 +1570,6 @@ public sealed partial class MainViewModel : ViewModelBase
     }
 
     partial void OnIsCheckingLoginChanged(bool value) => OnPropertyChanged(nameof(LoginButtonText));
-
-    partial void OnStateChanged(AppState value)
-    {
-        OnPropertyChanged(nameof(ShowLogin));
-        OnPropertyChanged(nameof(ShowContent));
-    }
 
     /// <summary>由 View 在复选框被点击时调用，持久化本地勾选。</summary>
     public async Task ToggleDoneAsync(TodoItemViewModel item)

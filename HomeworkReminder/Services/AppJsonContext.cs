@@ -47,6 +47,7 @@ namespace HomeworkReminder.Services;
 [JsonSerializable(typeof(YktMarkAllReadRequest))]
 // ---- 本地持久化 ----
 [JsonSerializable(typeof(SessionFile))]
+[JsonSerializable(typeof(ChaoxingSessionFile))]
 [JsonSerializable(typeof(SessionStore.ProtectedEnvelope))]
 [JsonSerializable(typeof(LocalState))]
 [JsonSerializable(typeof(AppSettings))]

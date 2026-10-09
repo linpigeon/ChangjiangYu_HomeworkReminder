@@ -53,6 +53,17 @@ public sealed class AppSettings
     /// <summary>发现新作业时是否发系统通知。</summary>
     public bool NotifyOnNewHomework { get; set; } = true;
 
+    // ---------------- 个人信息（设置页手动填写，不再从雨课堂拉取） ----------------
+
+    /// <summary>用户自定义姓名。null/空 = 显示「未登录」占位。</summary>
+    public string? CustomUserName { get; set; }
+
+    /// <summary>用户自定义副标题（学校 / 学号）。</summary>
+    public string? CustomUserSubtitle { get; set; }
+
+    /// <summary>用户自定义头像地址（http(s) 图片链接；本地路径亦可）。</summary>
+    public string? CustomAvatarUrl { get; set; }
+
     // ---------------- 桌面小组件 ----------------
 
     /// <summary>是否显示桌面小组件。</summary>

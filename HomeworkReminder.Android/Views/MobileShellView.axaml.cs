@@ -92,4 +92,10 @@ public partial class MobileShellView : UserControl
     {
         Vm?.CloseExamWeb();
     }
+
+    /// <summary>登录覆盖层的返回键。</summary>
+    private void OnLoginBackClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.CloseLoginPage();
+    }
 }

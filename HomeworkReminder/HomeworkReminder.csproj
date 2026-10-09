@@ -5,7 +5,7 @@
     <LangVersion>latest</LangVersion>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- 应用版本号：设置页「关于」与更新检查读取此处；发布时与 release tag 保持一致。 -->
-    <Version>1.3.0</Version>
+    <Version>1.3.1</Version>
   </PropertyGroup>
   
   <ItemGroup>

@@ -195,10 +195,10 @@ public partial class LoginView : UserControl
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(MainViewModel.ShowLogin)) return;
-        if (Vm is not { ShowLogin: true }) return;
+        if (e.PropertyName != nameof(MainViewModel.LoginPageOpen)) return;
+        if (Vm is not { LoginPageOpen: "ykt" }) return;
 
-        // 退出登录后回到登录页：允许重新自动检测，
+        // 重新打开登录覆盖层（例如退出登录后再登录）：允许重新自动检测，
         // 并且不要把占位盖在「仍停留在旧页面的 WebView」上面。
         _autoLoginStarted = false;
         _needsFreshPage = true;
@@ -208,7 +208,7 @@ public partial class LoginView : UserControl
     private async void AutoStartLogin()
     {
         if (_autoLoginStarted) return;
-        if (Vm is not { } vm || !vm.ShowLogin) return;
+        if (Vm is not { } vm || vm.LoginPageOpen != "ykt") return;
         if (vm.ShowCookieInput) return;
 
         _autoLoginStarted = true;

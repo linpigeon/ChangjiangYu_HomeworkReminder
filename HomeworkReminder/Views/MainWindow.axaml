@@ -27,11 +27,8 @@
     <Border Background="{Binding VeilBrush}" Opacity="{Binding VeilOpacity}" />
 
     <Panel>
-      <!-- 主界面 -->
-      <views:TodoShellView IsVisible="{Binding ShowContent}" />
-
-      <!-- 登录 / 出错 -->
-      <views:LoginView IsVisible="{Binding ShowLogin}" />
+      <!-- 主界面（启动即进；雨课堂登录已迁入设置页） -->
+      <views:TodoShellView />
     </Panel>
   </Grid>
 </Window>

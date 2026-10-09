@@ -69,11 +69,45 @@ public partial class SettingsView : UserControl
 
     private void OnShowSettingsTabClick(object? sender, RoutedEventArgs e)
     {
-        Vm?.ShowSettingsTab();
+        Vm?.ShowSettingsTab(0);
+    }
+
+    private void OnShowAccountTabClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.ShowSettingsTab(1);
     }
 
     private void OnShowAboutTabClick(object? sender, RoutedEventArgs e)
     {
-        Vm?.ShowAboutTab();
+        Vm?.ShowSettingsTab(2);
+    }
+
+    private void OnSaveProfileClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.SaveProfile();
+    }
+
+    private void OnYktLoginClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.OpenYktLogin();
+    }
+
+    private async void OnYktLogoutClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        if (TopLevel.GetTopLevel(this) is Window w &&
+            !await MessageBox.ConfirmAsync(w, "退出登录", "将清除本机保存的雨课堂登录态，需要重新扫码。确定吗？"))
+            return;
+        await vm.LogoutCommand.ExecuteAsync(null);
+    }
+
+    private void OnChaoxingLoginClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.OpenChaoxingLogin();
+    }
+
+    private void OnChaoxingLogoutClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.LogoutChaoxing();
     }
 }

@@ -138,8 +138,9 @@ sealed class Program
 
         if (settingsCheckIndex >= 0)
         {
-            // --selfcheck-settings <png> [about]：渲染设置页，带 about 参数渲染「关于」选项卡。
-            RunSettingsSelfCheck(settingsRenderPath, args.Contains("about"));
+            // --selfcheck-settings <png> [about|account]：渲染设置页，可指定选项卡。
+            RunSettingsSelfCheck(settingsRenderPath,
+                args.Contains("about") ? 2 : args.Contains("account") ? 1 : 0);
             return;
         }
 
@@ -391,7 +392,7 @@ sealed class Program
     /// 设置页自检：不读会话、不同步（设置页内容与登录态无关），
     /// 直接把主窗口切到设置页后跑布局与绑定检查、离屏渲染成 PNG。
     /// </summary>
-    private static void RunSettingsSelfCheck(string? renderPath, bool aboutTab)
+    private static void RunSettingsSelfCheck(string? renderPath, int settingsTab)
     {
         App.DeferInitialLoad = true;
 
@@ -426,7 +427,7 @@ sealed class Program
         window.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
         {
             vm.OpenSettings();
-            if (aboutTab) vm.ShowAboutTab();
+            if (settingsTab != 0) vm.ShowSettingsTab(settingsTab);
         });
         var code = SelfCheck.Run(window, renderPath);
         Environment.Exit(code);

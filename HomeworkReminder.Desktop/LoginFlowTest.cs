@@ -163,13 +163,13 @@ internal static class LoginFlowTest
         Console.WriteLine();
         Console.WriteLine("=== 退出登录测试结果 ===");
         Console.WriteLine($"  退出后状态     : {vm.State}");
-        Console.WriteLine($"  ShowLogin      : {vm.ShowLogin}");
+        Console.WriteLine($"  会话/API 已清空 : {vm.NoYktAccount}");
         Console.WriteLine($"  会话文件已删除 : {!sessionFileExists}");
         Console.WriteLine($"  Cookie 清理    : {vm.LogoutCookieReport}");
         Console.WriteLine($"  WebView 探测   : {statusAfter ?? "(null)"}   ← 期望 401");
 
-        var ok = vm.State == AppState.NeedsLogin
-                 && vm.ShowLogin
+        var ok = vm.State == AppState.Ready
+                 && vm.NoYktAccount
                  && !sessionFileExists
                  && statusAfter != "200";
 
