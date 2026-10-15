@@ -151,17 +151,28 @@
 
 ### 发版流程（含应用内更新所需的清单）
 
-版本号的**唯一事实来源**是仓库根目录的 `Directory.Build.props`：
+版本号的**唯一事实来源**是仓库根目录的 `Directory.Build.props`
+（桌面与 Android 共同继承，桌面 exe 的版本信息也由它决定）：
 
 ```powershell
-# 1. 改版本号（唯一一处）
-#    编辑 Directory.Build.props 的 <Version>
+# 1. 改版本号（两处，必须与 tag 一致）
+#    - Directory.Build.props        的 <Version>
+#    - HomeworkReminder.Android/*.csproj 的 <ApplicationDisplayVersion>
+#      （APK 的版本号不走 Directory.Build.props，需单独改，改后要重建 APK）
 
-# 2. 一键发布：校验版本一致性 → 打包 → 生成 update-manifest.json →（可选）上传
+# 2. 一键发布：校验版本一致性 → 打包 → 生成 update-manifest.json → 上传
+$env:GITHUB_TOKEN='<GitHub 令牌>'; $env:GITEA_TOKEN='<Gitea 令牌>'
 .\tools\release.ps1 -Tag v1.4.0 -Upload
+
+# 带 Android APK（历史 release 都带）
+.\tools\release.ps1 -Tag v1.4.0 -Upload `
+  -AndroidApk .\HomeworkReminder.Android\bin\Release\net10.0-android\com.CompanyName.HomeworkReminder-Signed.apk
 
 # 只校验并打包、不上传
 .\tools\release.ps1 -Tag v1.4.0
+
+# 产物已生成、只想重传（例如补权限后）
+.\tools\release.ps1 -Tag v1.4.0 -SkipBuild -Upload
 ```
 
 **版本号必须与 tag 一致**，否则客户端会陷入更新循环（装了新版仍报旧版号，每次检查都提示有更新）。
@@ -169,17 +180,27 @@
 
 上传需要两个环境变量（**不要写进仓库**）：
 
-| 变量 | 用途 |
+| 变量 | 需要的权限 |
 |---|---|
-| `GITHUB_TOKEN` | GitHub PAT（`repo` 权限） |
-| `GITEA_TOKEN` | Gitea 访问令牌 |
+| `GITHUB_TOKEN` | 细粒度令牌需 **Contents: Read and write**（仅有读权限时创建 release 会返回 403 `Resource not accessible by personal access token`） |
+| `GITEA_TOKEN` | 仓库写权限（访问令牌） |
+
+> 两个源的失败**互不阻断**：任一失败会记录并继续，最后汇总以非零码退出，
+> 并打印补传命令。所以可以先只配一个令牌、之后再补另一个。
 
 要在某个 release 上启用「应用内一键更新」，该 release 必须同时包含两个资产：
 
 | 资产 | 作用 |
 |---|---|
-| `HomeworkReminder-<tag>-win-x64.zip` | 更新包，**内含单个 exe** |
-| `update-manifest.json` | 更新清单：确切文件名 + SHA256 + 大小 |
+| `HomeworkReminder-<tag>-win-x64.zip` | 更新包，**内含单个 exe**（trim 模式，约 17 MB） |
+| `update-manifest.json` | 更新清单：确切文件名 + SHA256 + 大小（含 android 字段） |
+
+Android APK（`HomeworkReminder-<tag>-android.apk`）也放在同一个 release，
+但**不参与更新链路**——客户端自动更新只针对桌面端。
+
+> 打包需要联网还原：自包含发布依赖 runtime pack，而仓库根的 `NuGet.Config`
+> 把包源清成只剩本地文件夹源，因此 `publish.ps1` / `release.ps1` 会传 `-OnlineRestore`
+> 把 nuget.org 作为**额外源**（不改动 `NuGet.Config` 本身）。
 
 > 没有清单时仍可更新（按资产名兜底挑包），但**无法校验哈希**，会退化为只做版本兜底检查；
 > 建议每个 release 都带上清单。
