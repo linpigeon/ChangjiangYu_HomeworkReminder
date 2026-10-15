@@ -201,34 +201,52 @@ function Test-Release {
 }
 
 # --- GitHub ---
+# 每个源各自 try/catch：一个源失败（权限不足、限流、网络）不能阻断另一个源。
+# 实测踩到过：GitHub 令牌缺少 Contents:write 时抛错，脚本在 $ErrorActionPreference='Stop'
+# 下直接中止，导致后面的 Gitea 根本没执行。
+$uploadFailed = @()
 if ($env:GITHUB_TOKEN) {
-    $ghHeaders = @{
-        Authorization          = "Bearer $($env:GITHUB_TOKEN)"
-        Accept                 = 'application/vnd.github+json'
-        'User-Agent'           = 'HomeworkReminder-release'
-    }
-    $ghApi = "https://api.github.com/repos/$githubRepo"
-    $ghRelease = Test-Release -Url "$ghApi/releases/tags/$Tag" -Headers $ghHeaders
-    if (-not $ghRelease) {
-        Write-Host "   GitHub: 创建 release $Tag"
-        $body = @{ tag_name = $Tag; name = $Tag; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
-        $ghRelease = Invoke-RestMethod -Uri "$ghApi/releases" -Method Post -Headers $ghHeaders `
-            -ContentType 'application/json' -Body $body -TimeoutSec 60
-    } else {
-        Write-Host "   GitHub: release $Tag 已存在"
-    }
-
-    foreach ($asset in (@($zipPath, $manifestPath) + @($apkPath | Where-Object { $_ }))) {
-        $name = Split-Path $asset -Leaf
-        $existing = $ghRelease.assets | Where-Object { $_.name -eq $name }
-        if ($existing) {
-            Write-Host "   GitHub: 删除同名旧资产 $name"
-            Invoke-RestMethod -Uri "$ghApi/releases/assets/$($existing.id)" -Method Delete -Headers $ghHeaders -TimeoutSec 60 | Out-Null
+    try {
+        $ghHeaders = @{
+            Authorization          = "Bearer $($env:GITHUB_TOKEN)"
+            Accept                 = 'application/vnd.github+json'
+            'User-Agent'           = 'HomeworkReminder-release'
         }
-        $uploadUrl = ($ghRelease.upload_url -replace '\{\?.*\}', '') + "?name=$name"
-        Write-Host "   GitHub: 上传 $name"
-        Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $ghHeaders `
-            -ContentType 'application/octet-stream' -InFile $asset -TimeoutSec 900 | Out-Null
+        $ghApi = "https://api.github.com/repos/$githubRepo"
+        $ghRelease = Test-Release -Url "$ghApi/releases/tags/$Tag" -Headers $ghHeaders
+        if (-not $ghRelease) {
+            Write-Host "   GitHub: 创建 release $Tag"
+            $body = @{ tag_name = $Tag; name = $Tag; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
+            $ghRelease = Invoke-RestMethod -Uri "$ghApi/releases" -Method Post -Headers $ghHeaders `
+                -ContentType 'application/json' -Body $body -TimeoutSec 60
+        } else {
+            Write-Host "   GitHub: release $Tag 已存在"
+        }
+
+        foreach ($asset in (@($zipPath, $manifestPath) + @($apkPath | Where-Object { $_ }))) {
+            $name = Split-Path $asset -Leaf
+            $existing = $ghRelease.assets | Where-Object { $_.name -eq $name }
+            if ($existing) {
+                Write-Host "   GitHub: 删除同名旧资产 $name"
+                Invoke-RestMethod -Uri "$ghApi/releases/assets/$($existing.id)" -Method Delete -Headers $ghHeaders -TimeoutSec 60 | Out-Null
+            }
+            $uploadUrl = ($ghRelease.upload_url -replace '\{\?.*\}', '') + "?name=$name"
+            Write-Host "   GitHub: 上传 $name"
+            Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $ghHeaders `
+                -ContentType 'application/octet-stream' -InFile $asset -TimeoutSec 900 | Out-Null
+        }
+    } catch {
+        $uploadFailed += "GitHub"
+        Write-Host "   GitHub: 失败 —— $($_.Exception.Message)" -ForegroundColor Red
+        $hint = ''
+        try {
+            $sr = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $hint = $sr.ReadToEnd()
+        } catch { }
+        if ($hint -match 'Resource not accessible') {
+            Write-Host '   GitHub: 令牌缺少「Contents: Read and write」权限（细粒度令牌需在仓库权限里勾选）。' -ForegroundColor Yellow
+        }
+        Write-Host '   GitHub: 继续尝试下一个源。' -ForegroundColor Yellow
     }
 } else {
     Write-Host '   GitHub: 跳过（未设置 GITHUB_TOKEN）' -ForegroundColor Yellow
@@ -268,37 +286,49 @@ function Send-GiteaAsset {
 }
 
 # --- Gitea ---
+# 同样各自 try/catch：与 GitHub 互为镜像，任一失败不影响另一端。
 if ($env:GITEA_TOKEN) {
-    $gtHeaders = @{ Authorization = "token $($env:GITEA_TOKEN)"; 'User-Agent' = 'HomeworkReminder-release' }
-    $gtRelease = Test-Release -Url "$giteaApi/releases/tags/$Tag" -Headers $gtHeaders
-    if (-not $gtRelease) {
-        Write-Host "   Gitea: 创建 release $Tag"
-        $body = @{ tag_name = $Tag; name = $Tag; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
-        $gtRelease = Invoke-RestMethod -Uri "$giteaApi/releases" -Method Post -Headers $gtHeaders `
-            -ContentType 'application/json' -Body $body -TimeoutSec 60
-    } else {
-        Write-Host "   Gitea: release $Tag 已存在"
-    }
-
-    foreach ($asset in (@($zipPath, $manifestPath) + @($apkPath | Where-Object { $_ }))) {
-        $name = Split-Path $asset -Leaf
-        $existing = $gtRelease.assets | Where-Object { $_.name -eq $name }
-        if ($existing) {
-            Write-Host "   Gitea: 删除同名旧资产 $name"
-            Invoke-RestMethod -Uri "$giteaApi/releases/$($gtRelease.id)/assets/$($existing.id)" `
-                -Method Delete -Headers $gtHeaders -TimeoutSec 60 | Out-Null
+    try {
+        $gtHeaders = @{ Authorization = "token $($env:GITEA_TOKEN)"; 'User-Agent' = 'HomeworkReminder-release' }
+        $gtRelease = Test-Release -Url "$giteaApi/releases/tags/$Tag" -Headers $gtHeaders
+        if (-not $gtRelease) {
+            Write-Host "   Gitea: 创建 release $Tag"
+            $body = @{ tag_name = $Tag; name = $Tag; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
+            $gtRelease = Invoke-RestMethod -Uri "$giteaApi/releases" -Method Post -Headers $gtHeaders `
+                -ContentType 'application/json' -Body $body -TimeoutSec 60
+        } else {
+            Write-Host "   Gitea: release $Tag 已存在"
         }
-        Write-Host "   Gitea: 上传 $name"
-        # Gitea 用 multipart/form-data 上传附件。
-        # 刻意不用 Invoke-RestMethod 的 -Form：那个参数要 PowerShell 6+，
-        # 而发布机可能只有 PowerShell 5.1（本仓库的开发机就是 5.1）。
-        Send-GiteaAsset -Uri "$giteaApi/releases/$($gtRelease.id)/assets?name=$name" `
-            -Headers $gtHeaders -FieldName 'attachment' -FilePath $asset
+
+        foreach ($asset in (@($zipPath, $manifestPath) + @($apkPath | Where-Object { $_ }))) {
+            $name = Split-Path $asset -Leaf
+            $existing = $gtRelease.assets | Where-Object { $_.name -eq $name }
+            if ($existing) {
+                Write-Host "   Gitea: 删除同名旧资产 $name"
+                Invoke-RestMethod -Uri "$giteaApi/releases/$($gtRelease.id)/assets/$($existing.id)" `
+                    -Method Delete -Headers $gtHeaders -TimeoutSec 60 | Out-Null
+            }
+            Write-Host "   Gitea: 上传 $name"
+            # Gitea 用 multipart/form-data 上传附件。
+            # 刻意不用 Invoke-RestMethod 的 -Form：那个参数要 PowerShell 6+，
+            # 而发布机可能只有 PowerShell 5.1（本仓库的开发机就是 5.1）。
+            Send-GiteaAsset -Uri "$giteaApi/releases/$($gtRelease.id)/assets?name=$name" `
+                -Headers $gtHeaders -FieldName 'attachment' -FilePath $asset
+        }
+    } catch {
+        $uploadFailed += "Gitea"
+        Write-Host "   Gitea: 失败 —— $($_.Exception.Message)" -ForegroundColor Red
     }
 } else {
     Write-Host '   Gitea: 跳过（未设置 GITEA_TOKEN）' -ForegroundColor Yellow
 }
 
 Write-Host ''
+if ($uploadFailed.Count -gt 0) {
+    Write-Host "== 部分上传失败：$($uploadFailed -join '、') ==" -ForegroundColor Red
+    Write-Host '   产物已生成在 publish\ 下，可人工补传或修好权限后重跑：'
+    Write-Host "     .\tools\release.ps1 -Tag $Tag -SkipBuild -Upload"
+    exit 1
+}
 Write-Host '== 完成 ==' -ForegroundColor Green
 Write-Host "   客户端将在下次「检查更新」时看到 $Tag，并可一键下载更新。"
