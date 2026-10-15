@@ -106,6 +106,45 @@ public partial class LoginView : UserControl
         "info.tree=w?Array.from(w.querySelectorAll('*')).slice(0,60).map(e=>e.tagName+'.'+String(e.className).slice(0,50)+'|'+R(e)):[];" +
         "return JSON.stringify(info);})()";
 
+    /// <summary>
+    /// 登录方式探针（<c>HWREMINDER_LOGIN_PROBE=1</c> 时写入 login-probe.txt）。
+    /// <para>
+    /// 存在的理由：「微信快捷登录」这类入口渲染在页面里，而页面是纯 SPA、静态抓取
+    /// 只能拿到空壳；仓库原有的 <see cref="DomDumpScript"/> 又只遍历主文档，
+    /// 二维码/登录方式实际在 <c>/authorize/wx-qrlogin</c> 的 iframe 内，所以一直没被发现。
+    /// 这里把**主文档与各 iframe 的可见文本、按钮、链接、自定义协议入口**都抓出来，
+    /// 用来回答「页面到底有没有渲染出快捷登录入口」这个问题。
+    /// </para>
+    /// <para>
+    /// 全程只读：不改 DOM、不点击、不发送任何请求。
+    /// </para>
+    /// </summary>
+    public const string LoginMethodProbeScript =
+        "(function(){var out=[];" +
+        "function desc(doc,label){" +
+        "var vis=function(e){var s=getComputedStyle(e);if(s.display==='none'||s.visibility==='hidden'||s.opacity==='0')return false;" +
+        "var r=e.getBoundingClientRect();return r.width>0&&r.height>0;};" +
+        "var pick=function(sel){try{return Array.from(doc.querySelectorAll(sel)).filter(vis).map(function(e){" +
+        "return (e.tagName+'['+(e.className||'')+'] '+(e.textContent||'').trim().replace(/\\s+/g,' ').slice(0,60) " +
+        "+' href='+(e.getAttribute&&(e.getAttribute('href')||'')||'').slice(0,120)" +
+        "+' onclick='+String(e.getAttribute&&e.getAttribute('onclick')||'').slice(0,120)).trim();});}catch(err){return ['<err '+err.message+'>'];}};" +
+        "var txt=(doc.body&&doc.body.innerText||'').replace(/\\s+/g,' ').trim().slice(0,600);" +
+        "out.push('===== '+label+' url='+doc.location.href);" +
+        "out.push('  visibleText: '+txt);" +
+        "out.push('  buttons : '+JSON.stringify(pick('button,a,[role=button],.btn,[class*=login],[class*=way],[class*=changeImg]')));" +
+        "out.push('  canvas/img: '+JSON.stringify(pick('canvas,img')));" +
+        "out.push('  iframes : '+JSON.stringify(Array.from(doc.querySelectorAll('iframe')).map(function(f){return f.src;})));" +
+        "} " +
+        "desc(document,'TOP');" +
+        // 逐层进 iframe；同源才能读，跨源会被挡（用户/页面看到的效果一致，无需特判）。
+        "var walk=function(doc,depth){if(depth>2)return;" +
+        "Array.from(doc.querySelectorAll('iframe')).forEach(function(f,i){" +
+        "try{var d=f.contentDocument;if(d&&d.body){desc(d,'IFRAME'+depth+'.'+i);walk(d,depth+1);}}" +
+        "catch(e){out.push('===== IFRAME'+depth+'.'+i+' <cross-origin: '+e.name+'> src='+f.src);}});};" +
+        "walk(document,0);" +
+        "return out.join('\\n');})()";
+
+
     public LoginView()
     {
         InitializeComponent();
@@ -148,6 +187,16 @@ public partial class LoginView : UserControl
                 await File.AppendAllTextAsync(
                     Path.Combine(AppPaths.DataDirectory, "login-dom.txt"),
                     $"--- dump ---\n{dump ?? "(null)"}\n").ConfigureAwait(true);
+            }
+
+            // 登录方式探针：用来确认页面到底有没有渲染出「微信快捷登录」这类入口。
+            // 只读 DOM，不点击、不请求。
+            if (Environment.GetEnvironmentVariable("HWREMINDER_LOGIN_PROBE") == "1")
+            {
+                var probe = await LoginWebView.InvokeScript(LoginMethodProbeScript).ConfigureAwait(true);
+                await File.AppendAllTextAsync(
+                    Path.Combine(AppPaths.DataDirectory, "login-probe.txt"),
+                    $"--- probe {DateTimeOffset.Now:O} ---\n{probe ?? "(null)"}\n").ConfigureAwait(true);
             }
         }
         catch (Exception)
@@ -202,7 +251,19 @@ public partial class LoginView : UserControl
         // 并且不要把占位盖在「仍停留在旧页面的 WebView」上面。
         _autoLoginStarted = false;
         _needsFreshPage = true;
-        WebViewPlaceholder.IsVisible = false;
+
+        // 打开覆盖层必须自己把 WebView 挂上来。
+        // 启动时 LoginView 已在可视树里，但 OnAttachedToVisualTree 投递的 AutoStartLogin
+        // 会因 LoginPageOpen 仍为 null 直接返回（且不置 _autoLoginStarted），
+        // 因此「设置 → 账号 → 扫码登录」这条路径此前只有下面那一行隐藏占位：
+        // WebViewHost 的 IsVisible 一直停在 XAML 里的 False，
+        // 而 WebView2 的原生控件在隐藏状态下照样会把登录页加载出来 ——
+        // 结果是页面显示了、原生绘制面却从未按控件边界同步过，二维码不居中。
+        ShowWebView();
+
+        // 等布局跑完再启动登录检测：ShowWebView 刚刚才把 Host 置为可见，
+        // 同一帧内拿到的 Bounds 还是旧的。
+        Avalonia.Threading.Dispatcher.UIThread.Post(AutoStartLogin, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     private async void AutoStartLogin()
@@ -212,21 +273,30 @@ public partial class LoginView : UserControl
         if (vm.ShowCookieInput) return;
 
         _autoLoginStarted = true;
-        ShowWebView();
 
-        // 供界面调试：HWREMINDER_CLEAR_WEBVIEW_LOGIN=1 时先清掉 WebView 里持久化的
-        // 登录态，否则自动检测会直接接管旧会话跳进主界面，永远看不到二维码。
-        if (Environment.GetEnvironmentVariable("HWREMINDER_CLEAR_WEBVIEW_LOGIN") == "1")
+        // async void：异常逃逸会终止进程（没有全局 UI 异常处理器），必须自己兜住。
+        try
         {
-            // 等适配器就绪后再清，否则 CookieManager 拿不到。
-            for (var i = 0; i < 100 && !_webViewUsable; i++)
-                await Task.Delay(100);
-            if (_webViewUsable)
-                await YktLoginService.ClearCookiesAsync(LoginWebView);
-        }
+            ShowWebView();
 
-        // isAutoDetect: true —— 后台检测，不占用按钮的可点状态。
-        _ = vm.CompleteLoginAsync(LoginWebView, isAutoDetect: true);
+            // 供界面调试：HWREMINDER_CLEAR_WEBVIEW_LOGIN=1 时先清掉 WebView 里持久化的
+            // 登录态，否则自动检测会直接接管旧会话跳进主界面，永远看不到二维码。
+            if (Environment.GetEnvironmentVariable("HWREMINDER_CLEAR_WEBVIEW_LOGIN") == "1")
+            {
+                // 等适配器就绪后再清，否则 CookieManager 拿不到。
+                for (var i = 0; i < 100 && !_webViewUsable; i++)
+                    await Task.Delay(100);
+                if (_webViewUsable)
+                    await YktLoginService.ClearCookiesAsync(LoginWebView);
+            }
+
+            // isAutoDetect: true —— 后台检测，不占用按钮的可点状态。
+            _ = vm.CompleteLoginAsync(LoginWebView, isAutoDetect: true);
+        }
+        catch (Exception ex)
+        {
+            vm.LoginStatusText = $"登录页初始化失败：{ex.Message}";
+        }
     }
 
     /// <summary>
@@ -266,6 +336,14 @@ public partial class LoginView : UserControl
         // 适配器创建完成前先显示占位；但若 WebView 里已有内容（例如刚退出登录），
         // 就不要用占位把它盖住。
         WebViewPlaceholder.IsVisible = !_webViewUsable && !_needsFreshPage;
+
+        // 让托管布局重跑一遍，把原生控件按最终边界重新定位。
+        // 必要性：WebView2 的原生控件在 IsVisible=False 期间仍会创建并加载页面，
+        // 而登录覆盖层是「从隐藏切换为显示」，原生绘制面若不在这次切换后同步，
+        // 页面就只会在错误的位置/尺寸上渲染（表现为二维码偏出中间）。
+        // 只置 IsVisible 不触发 WebView 自身的重新定位，必须显式失效布局。
+        WebViewHost.InvalidateMeasure();
+        WebViewHost.InvalidateArrange();
     }
 
     private async void OnStartLoginClick(object? sender, RoutedEventArgs e)
@@ -301,6 +379,15 @@ public partial class LoginView : UserControl
             return;
         }
 
-        await vm.UseCookieAsync(text);
+        // UseCookieAsync 只接 ArgumentException；解析之外的失败（例如保存会话时的 IO）
+        // 会从 async void 处理器逃逸并终止进程。
+        try
+        {
+            await vm.UseCookieAsync(text);
+        }
+        catch (Exception ex)
+        {
+            vm.ErrorMessage = $"Cookie 登录失败：{ex.Message}";
+        }
     }
 }

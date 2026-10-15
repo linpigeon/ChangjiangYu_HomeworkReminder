@@ -68,19 +68,6 @@
           </StackPanel>
         </Border>
 
-        <!-- 未登录引导（启动即进主界面后，列表是空的，登录入口在设置页） -->
-        <Border IsVisible="{Binding NoYktAccount}"
-                Background="{DynamicResource TodoAccentSoft}"
-                CornerRadius="4" Padding="10,8">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="还没有雨课堂账号，登录后这里才会显示作业" FontSize="12"
-                       TextWrapping="Wrap" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TodoTextPrimary}" />
-            <Button Classes="outline" Content="去登录" Padding="8,3" FontSize="11"
-                    VerticalAlignment="Center" Click="OnGoLoginClick" />
-          </StackPanel>
-        </Border>
-
         <CheckBox Classes="todo" Content="隐藏已勾选" FontSize="11"
                   Foreground="{DynamicResource TodoTextSecondary}"
                   IsChecked="{Binding List.HideLocallyDone}"
@@ -155,12 +142,47 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- 空状态 -->
+      <!--
+        课程视图：学习通每门课的未完成任务点汇总。
+        与待办列表是两条独立通道（课程行没有勾选/截止时间/进度），
+        由 List.ShowCourseList 决定渲染哪一条。
+      -->
+      <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled"
+                    IsVisible="{Binding List.ShowCourseList}">
+        <ItemsControl ItemsSource="{Binding List.Courses}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChaoxingCourseViewModel">
+              <Border Classes="row"
+                      Classes.selected="{Binding IsSelected}"
+                      Tapped="OnCourseTapped">
+                <Grid ColumnDefinitions="*,Auto">
+
+                  <StackPanel Grid.Column="0" Margin="2,0,8,0" Spacing="3">
+                    <TextBlock Classes="title" Text="{Binding CourseName}" />
+                    <TextBlock Classes="faint" Text="{Binding SummaryText}" />
+                    <TextBlock Classes="meta" Text="{Binding ClazzText}"
+                               IsVisible="{Binding HasClazzText}" />
+                  </StackPanel>
+
+                  <!-- 右侧：未完成任务点徽标 -->
+                  <Border Grid.Column="1" Classes="badge progress"
+                          IsVisible="{Binding HasPending}"
+                          VerticalAlignment="Top">
+                    <TextBlock Text="{Binding PendingText}" />
+                  </Border>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- 空状态（待办为空 / 课程为空时共用 List.EmptyMessage） -->
       <TextBlock Grid.Row="2" Classes="faint"
                  Text="{Binding List.EmptyMessage}"
                  HorizontalAlignment="Center" VerticalAlignment="Center"
                  Margin="24"
-                 IsVisible="{Binding !List.HasItems}" />
+                 IsVisible="{Binding !List.HasAnyContent}" />
 
       <!-- 忙碌条 -->
       <Border Grid.Row="3" IsVisible="{Binding IsBusy}"

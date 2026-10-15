@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    应用版本号的唯一事实来源。
+
+    为什么放在根级：原先 <Version> 只写在共享项目 HomeworkReminder.csproj 里，
+    而**桌面头没有**，于是 HomeworkReminder.Desktop.exe 用了默认的 1.0.0 ——
+    实测发布版 exe 的 FileVersion 是 "1.0.0.0"、ProductVersion 是 "1.0.0+<sha>"，
+    与 release tag 完全对不上。后果有两个：
+      1. exe 属性对话框里永远显示 1.0.0；
+      2. 任何「按 exe 文件版本校验更新包」的逻辑都必然失败。
+
+    放在根级后所有项目（共享/桌面/Android/iOS/Browser）继承同一个版本，
+    不会再有某一头掉队。发布时 publish.ps1 会用 -p:Version=<tag> 覆盖，
+    保证 exe 里烘进去的版本与 release tag 严格一致。
+
+    改版本号时只改这一处；发布脚本会校验它与 tag 是否一致。
+  -->
+  <PropertyGroup>
+    <Version>1.3.2</Version>
+  </PropertyGroup>
+</Project>

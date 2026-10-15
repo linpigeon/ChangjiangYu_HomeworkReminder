@@ -23,6 +23,24 @@ public sealed class TodoCacheFile
 
     public List<TodoItem> Homework { get; set; } = [];
 
+    /// <summary>
+    /// 学习通（超星）条目。与 <see cref="Homework"/> 分开存放：它们的截止时间是
+    /// 「同步时刻 + 相对剩余时间」，旧缓存里没有 <c>RemainingAtSync</c> 时只能按
+    /// <see cref="SyncedAt"/> 粗略还原，分开存便于按来源区分处理与排错。
+    /// </summary>
+    public List<TodoItem> Chaoxing { get; set; } = [];
+
+    /// <summary>
+    /// 批改网（pigai.org）条目。同样与 <see cref="Homework"/> 分开存放，
+    /// 便于按来源处理与排错；它的截止时间是绝对时间，无相对量还原问题。
+    /// </summary>
+    public List<TodoItem> Pigai { get; set; } = [];
+
+    /// <summary>
+    /// 学习通课程维度的未完成任务点汇总（不是待办条目）。
+    /// </summary>
+    public List<ChaoxingCourse> ChaoxingCourses { get; set; } = [];
+
     public List<TodoItem> Announcements { get; set; } = [];
 
     /// <summary>每门课（classroomId）上次同步时的作业日志签名，用于增量比对。</summary>
@@ -75,7 +93,10 @@ public sealed class TodoCacheStore : ITodoCacheStore
             // 合法性校验：坏条目（缺 id/标题、id 前缀与类型不符、时间戳离谱、重复 id）
             // 一律丢弃——缓存文件可能被手改、被旧版本写坏，不能让脏数据进列表。
             cache.Homework = Validate(cache.Homework, TodoKind.Homework);
+            cache.Chaoxing = Validate(cache.Chaoxing, TodoKind.Homework, cache.SyncedAt);
+            cache.Pigai = Validate(cache.Pigai, TodoKind.Homework);
             cache.Announcements = Validate(cache.Announcements, TodoKind.Announcement);
+            cache.ChaoxingCourses = ValidateCourses(cache.ChaoxingCourses);
             return cache;
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
@@ -116,7 +137,8 @@ public sealed class TodoCacheStore : ITodoCacheStore
         return Task.CompletedTask;
     }
 
-    private static List<TodoItem> Validate(List<TodoItem> items, TodoKind kind)
+    private static List<TodoItem> Validate(
+        List<TodoItem> items, TodoKind kind, DateTimeOffset? anchorFallback = null)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var valid = new List<TodoItem>(items.Count);
@@ -126,6 +148,29 @@ public sealed class TodoCacheStore : ITodoCacheStore
             if (item.Kind != kind) continue;
             var prefix = kind == TodoKind.Homework ? "hw-" : "ann-";
             if (!item.Id.StartsWith(prefix, StringComparison.Ordinal)) continue;
+
+            // 相对时间形态（学习通）：只给了基准 + 剩余量时，截止时间由两者推算，
+            // 此时 DueAt 本就为空、基准时刻才是需要校验的那个时间戳。
+            if (item.DueAt is null && item.RemainingAtSync is { } left)
+            {
+                if (item.DeadlineAnchor is { } storedAnchor)
+                {
+                    // 基准已经存在：它必须落在合理区间，否则这条记录的相对量无从还原。
+                    if (!PlausibleAnchor(storedAnchor)) continue;
+                }
+                else
+                {
+                    // 旧缓存（本改动之前写入的）没有基准字段：用缓存自身的同步时刻补上，
+                    // 宁可让倒计时偏差一次，也好过把这条作业整个丢掉。
+                    if (anchorFallback is not { } fb || !PlausibleAnchor(fb)) continue;
+                    item.Reanchor(fb);
+                }
+
+                if (!seen.Add(item.Id)) continue;
+                valid.Add(item);
+                continue;
+            }
+
             if (!Plausible(item.DueAt) || !Plausible(item.PublishedAt)) continue;
             if (!seen.Add(item.Id)) continue;
             valid.Add(item);
@@ -135,4 +180,34 @@ public sealed class TodoCacheStore : ITodoCacheStore
 
     private static bool Plausible(DateTimeOffset? t)
         => t is null || (t >= MinPlausible && t <= MaxPlausible);
+
+    /// <summary>
+    /// 课程汇总的合法性校验：丢弃没有课程名或 id 不成立的条目。
+    /// 任务点数按「不明则为 0」处理，不因为一个数字离谱就丢掉整门课。
+    /// </summary>
+    private static List<ChaoxingCourse> ValidateCourses(List<ChaoxingCourse> courses)
+    {
+        var seen = new HashSet<long>();
+        var valid = new List<ChaoxingCourse>(courses.Count);
+        foreach (var c in courses)
+        {
+            if (string.IsNullOrWhiteSpace(c.CourseName)) continue;
+            if (c.CourseId <= 0 || c.ClazzId <= 0) continue;
+            if (!seen.Add(c.CourseId)) continue;
+            if (c.PendingTaskPoints < 0) c.PendingTaskPoints = 0;
+            // 明细里丢掉明显无效的行（没有名字、计数非正）。
+            c.Leaves = c.Leaves
+                .Where(l => !string.IsNullOrWhiteSpace(l.Name) && l.PendingCount > 0)
+                .ToList();
+            valid.Add(c);
+        }
+        return valid;
+    }
+
+    /// <summary>
+    /// 基准时刻的合法性：既不能离谱地早于/晚于合理区间，也不能晚于现在太多
+    /// （基准在未来意味着相对剩余量会被算成负数以外的怪值）。
+    /// </summary>
+    private static bool PlausibleAnchor(DateTimeOffset anchor)
+        => anchor >= MinPlausible && anchor <= MaxPlausible && anchor <= DateTimeOffset.Now.AddDays(1);
 }

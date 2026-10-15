@@ -20,6 +20,27 @@ internal static class AndroidPlatformHooks
         // 学习通：Avalonia 的 CookieManager 抽象在 Android 不可用，走原生 CookieManager。
         ChaoxingLoginService.CookieReaderOverride = ReadChaoxingCookie;
         ChaoxingLoginService.CookieClearOverride = ClearChaoxingCookies;
+
+        // 批改网：同上。
+        PigaiLoginService.CookieReaderOverride = ReadPigaiCookie;
+        PigaiLoginService.CookieClearOverride = ClearPigaiCookies;
+    }
+
+    /// <summary>读出 pigai.org 域的整条 Cookie（含 HttpOnly；PHPSESSID 必须在）。</summary>
+    private static Task<string?> ReadPigaiCookie()
+        => Task.FromResult(global::Android.Webkit.CookieManager.Instance?.GetCookie("https://www.pigai.org"));
+
+    /// <summary>
+    /// 原生 CookieManager 没有按域删除：给批改网的会话 cookie 写过期值使其失效
+    /// （全清会误伤同库存放的雨课堂/学习通登录态）。
+    /// </summary>
+    private static Task ClearPigaiCookies()
+    {
+        var cm = global::Android.Webkit.CookieManager.Instance;
+        foreach (var name in new[] { "_JKU", "_JUKU_USER", "PHPSESSID" })
+            cm?.SetCookie("https://www.pigai.org", $"{name}=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+        cm?.Flush();
+        return Task.CompletedTask;
     }
 
     /// <summary>读出 chaoxing.com 域的整条 Cookie（含 HttpOnly）。</summary>

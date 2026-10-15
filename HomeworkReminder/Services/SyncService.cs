@@ -43,6 +43,29 @@ public sealed class SyncResult
     /// </summary>
     public IReadOnlyList<TodoItem> HomeworkForCache { get; init; } = [];
 
+    /// <summary>
+    /// 学习通（超星）条目，供落盘缓存。
+    /// <para>
+    /// 单独一份的原因：它的 <c>DueAt</c> 是用「同步时刻 + 页面上的相对剩余时间」推出来的，
+    /// 缓存里的 <see cref="TodoItem.RemainingAtSync"/> 才是可复原的那一份。
+    /// 若只放进 <see cref="HomeworkForCache"/>，冷启动的秒开列表里会永远缺学习通作业
+    /// （见 <see cref="TodoCacheStore"/>）。
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<TodoItem> ChaoxingForCache { get; init; } = [];
+
+    /// <summary>
+    /// 批改网（pigai.org）条目，供落盘缓存。
+    /// 与 <see cref="ChaoxingForCache"/> 同理：不单独存一份的话，冷启动的秒开列表会缺这一路。
+    /// </summary>
+    public IReadOnlyList<TodoItem> PigaiForCache { get; init; } = [];
+
+    /// <summary>
+    /// 学习通课程维度的未完成任务点汇总。不是待办条目，单独一条通道
+    /// （任务点粒度到小节，拆成逐条待办会把列表淹掉）。
+    /// </summary>
+    public IReadOnlyList<ChaoxingCourse> ChaoxingCourses { get; init; } = [];
+
     /// <summary>这次同步里走增量捷径（跳过节点的课程数），仅用于状态展示。</summary>
     public int ReusedCourses { get; init; }
 

@@ -48,12 +48,18 @@ namespace HomeworkReminder.Services;
 // ---- 本地持久化 ----
 [JsonSerializable(typeof(SessionFile))]
 [JsonSerializable(typeof(ChaoxingSessionFile))]
+[JsonSerializable(typeof(PigaiSessionFile))]
 [JsonSerializable(typeof(SessionStore.ProtectedEnvelope))]
 [JsonSerializable(typeof(LocalState))]
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(TodoCacheFile))]
-// ---- 更新检查 ----
+// ---- 更新检查与更新包 ----
 [JsonSerializable(typeof(ReleaseInfo))]
+// 用「列出 release」接口（/releases/latest 不返回 assets，拿不到下载地址）。
+[JsonSerializable(typeof(List<ReleaseInfo>))]
+[JsonSerializable(typeof(ReleaseAsset))]
+[JsonSerializable(typeof(List<ReleaseAsset>))]
+[JsonSerializable(typeof(UpdateManifest))]
 // internal：上下文包含 internal 的 SessionStore.ProtectedEnvelope，
 // public 上下文会导致生成代码的可访问性不一致（CS0053）。全部使用点都在本程序集内。
 internal partial class AppJsonContext : JsonSerializerContext;

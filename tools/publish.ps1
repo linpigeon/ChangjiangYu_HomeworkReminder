@@ -8,6 +8,7 @@
 #   .\tools\publish.ps1 -Mode fdd             # 框架依赖（体积最小，需目标机装运行时）
 #   .\tools\publish.ps1 -Mode sc              # 自包含多文件
 #   .\tools\publish.ps1 -Mode single -Open    # 发布后打开输出目录
+#   .\tools\publish.ps1 -Version 1.3.2        # 指定版本（应等于 release tag）
 param(
     # fdd = 框架依赖；sc = 自包含多文件；single = 自包含单文件；trim = 单文件+裁剪（体积最小，启动最快）
     [ValidateSet('fdd', 'sc', 'single', 'trim')]
@@ -15,8 +16,20 @@ param(
 
     [string]$Runtime = 'win-x64',
     [string]$Configuration = 'Release',
+    # 发布版本号。留空则用根目录 Directory.Build.props 里的值；
+    # 传值（通常来自 release tag）时会被烘进 exe 的版本信息。
+    # **必须与 release tag 一致**，否则「检查更新」会陷入更新循环：
+    #   远端 tag=v1.3.2 → 下载安装 → 程序仍报 1.3.1 → 再次提示有更新。
+    [string]$Version = '',
     [switch]$NoPdb,
-    [switch]$Open
+    [switch]$Open,
+    # 联网还原。
+    # 为什么需要它：仓库根的 NuGet.Config 把包源 `<clear />` 成只有本地 packages/，
+    # 常规 build 够用，但 **自包含发布需要 runtime pack**
+    # （Microsoft.NETCore.App.Runtime.win-x64 等），本地文件夹源里没有，
+    # 于是 publish 会以 NU1101 失败。加这个开关会把 nuget.org 作为**额外源**传给
+    # restore/publish（不改动 NuGet.Config 本身），在能联网的机器上完成还原。
+    [switch]$OnlineRestore
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +60,30 @@ $args = @(
     '-o', $outDir,
     '-v', 'minimal'
 )
+
+# 联网还原：把 nuget.org 作为**额外源**（不动 NuGet.Config）。见 -OnlineRestore 的说明。
+if ($OnlineRestore) {
+    Write-Host '== 联网还原（额外源 nuget.org）==' -ForegroundColor Cyan
+    $args += @('--source', 'https://api.nuget.org/v3/index.json', '--source', (Join-Path $root 'packages'))
+}
+
+# 版本号：优先用显式传入的（应来自 release tag），否则用 Directory.Build.props 的值。
+# 通过 -p:Version 覆盖，保证 exe 的 FileVersion/ProductVersion 与 tag 一致——
+# 更新包版本校验与「关于」页显示都依赖它。
+$effectiveVersion = $Version
+if (-not $effectiveVersion) {
+    $propsPath = Join-Path $root 'Directory.Build.props'
+    if (Test-Path $propsPath) {
+        $m = Select-String -Path $propsPath -Pattern '<Version>([^<]+)</Version>'
+        if ($m) { $effectiveVersion = $m.Matches[0].Groups[1].Value.Trim() }
+    }
+}
+if (-not $effectiveVersion) {
+    Write-Host '== 无法确定版本号：Directory.Build.props 里没有 <Version>，也没传 -Version ==' -ForegroundColor Red
+    exit 1
+}
+$args += @("-p:Version=$effectiveVersion")
+Write-Host "== 版本号：$effectiveVersion ==" -ForegroundColor Cyan
 
 switch ($Mode) {
     'fdd' {

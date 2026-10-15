@@ -53,6 +53,15 @@ public sealed class AppSettings
     /// <summary>发现新作业时是否发系统通知。</summary>
     public bool NotifyOnNewHomework { get; set; } = true;
 
+    /// <summary>
+    /// 是否接收**预发布版**（prerelease）更新。
+    /// <para>
+    /// 默认 <c>false</c>：预发布版本是给测试用的，不该推给正式版用户。
+    /// 打开后「检查更新」会把 prerelease/draft 也纳入候选。
+    /// </para>
+    /// </summary>
+    public bool IncludePrereleaseUpdates { get; set; }
+
     // ---------------- 个人信息（设置页手动填写，不再从雨课堂拉取） ----------------
 
     /// <summary>用户自定义姓名。null/空 = 显示「未登录」占位。</summary>

@@ -94,18 +94,18 @@ public sealed partial class WidgetViewModel : ViewModelBase
         {
             "myday" => pending
                 .Where(i => i.Kind == TodoKind.Homework)
-                .Where(i => i.IsOverdue || (i.Model.DueAt is { } d && d.Date <= DateTimeOffset.Now.Date))
-                .OrderBy(i => i.Model.DueAt ?? DateTimeOffset.MaxValue),
+                .Where(i => i.IsOverdue || (i.Model.EffectiveDueAt is { } d && d.Date <= DateTimeOffset.Now.Date))
+                .OrderBy(i => i.Model.EffectiveDueAt ?? DateTimeOffset.MaxValue),
 
             "planned" => pending
-                .Where(i => i.Model.DueAt is not null)
-                .OrderBy(i => i.Model.DueAt),
+                .Where(i => i.Model.EffectiveDueAt is not null)
+                .OrderBy(i => i.Model.EffectiveDueAt),
 
             "homework" => pending
                 .Where(i => i.Kind == TodoKind.Homework)
-                .OrderBy(i => i.Model.DueAt ?? DateTimeOffset.MaxValue),
+                .OrderBy(i => i.Model.EffectiveDueAt ?? DateTimeOffset.MaxValue),
 
-            _ => pending.OrderBy(i => i.Model.DueAt ?? DateTimeOffset.MaxValue),
+            _ => pending.OrderBy(i => i.Model.EffectiveDueAt ?? DateTimeOffset.MaxValue),
         };
 
         Items.Clear();

@@ -157,7 +157,7 @@ public sealed class AutoSyncService : IDisposable
 
             var fresh = current.Where(h => !_seen.Contains(KeyOf(h))).ToList();
             _seen.UnionWith(keys);
-            return fresh.OrderBy(h => h.DueAt ?? DateTimeOffset.MaxValue).ToList();
+            return fresh.OrderBy(h => h.EffectiveDueAt ?? DateTimeOffset.MaxValue).ToList();
         }
     }
 
@@ -200,7 +200,7 @@ public sealed class AutoSyncService : IDisposable
             : string.Join("\n", fresh.Take(3).Select(h => "· " + h.Title))
               + (fresh.Count > 3 ? $"\n…另有 {fresh.Count - 3} 项" : string.Empty);
 
-        var attribution = first.DueAt is null
+        var attribution = first.EffectiveDueAt is null
             ? "无期限"
             : $"截止 {first.DueText}（{first.RemainingText}）";
 

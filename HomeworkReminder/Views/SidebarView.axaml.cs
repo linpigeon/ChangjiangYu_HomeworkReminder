@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -28,19 +29,42 @@ public partial class SidebarView : UserControl
 
     private async void OnRefreshClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm) await vm.RefreshCommand.ExecuteAsync(null);
+        if (Vm is not { } vm) return;
+        try
+        {
+            await vm.RefreshCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex)
+        {
+            ReportHandlerFailure(vm, "同步", ex);
+        }
     }
 
     private async void OnLogoutClick(object? sender, RoutedEventArgs e)
     {
         if (Vm is not { } vm) return;
 
-        if (TopLevel.GetTopLevel(this) is Window w &&
-            !await MessageBox.ConfirmAsync(w, "退出登录", "将清除本机保存的雨课堂登录态，需要重新扫码。确定吗？"))
-            return;
+        try
+        {
+            if (TopLevel.GetTopLevel(this) is Window w &&
+                !await MessageBox.ConfirmAsync(w, "退出登录", "将清除本机保存的雨课堂登录态，需要重新扫码。确定吗？"))
+                return;
 
-        await vm.LogoutCommand.ExecuteAsync(null);
+            await vm.LogoutCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex)
+        {
+            ReportHandlerFailure(vm, "退出登录", ex);
+        }
     }
+
+    /// <summary>
+    /// 处理器是 async void：异常一旦逃逸到 UI 线程就会终止进程
+    /// （本应用没有全局 UI 异常处理器，只有 AppDomain 级的日志），
+    /// 所以每个 async void 处理器都必须自己兜住并给出可见反馈。
+    /// </summary>
+    internal static void ReportHandlerFailure(MainViewModel vm, string action, Exception ex)
+        => vm.SyncStatus = $"{action}失败：{ex.Message}";
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {

@@ -24,4 +24,21 @@ public interface IPlatformServices
     /// 调用方应回落到 <see cref="OpenUrl"/>。
     /// </summary>
     bool OpenInYktApp(string url) => false;
+
+    /// <summary>
+    /// 「为安装更新而退出应用」。
+    /// <para>
+    /// 实现方应重写到本平台**正常的退出路径**上：桌面头要在退出前持久化小组件位置
+    /// （见 <c>MainWindow.QuitForReal</c>），直接 <c>Shutdown()</c> 会丢掉那个位置。
+    /// 默认实现是通用兜底：关闭 Avalonia 应用；非桌面生命周期下什么都不做。
+    /// </para>
+    /// </summary>
+    void RequestExitForUpdate()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+    }
 }

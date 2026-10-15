@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:controls="using:Avalonia.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="700"
+             x:Class="HomeworkReminder.Views.PigaiLoginView"
+             x:DataType="vm:MainViewModel"
+             Background="{Binding SurfaceBrush}">
+
+  <!-- 批改网登录页：WebView 加载批改网首页（账号密码表单就在首页上），登录成功自动捕获会话并关闭。 -->
+  <Grid RowDefinitions="Auto,*">
+    <StackPanel Grid.Row="0" Margin="36,22,36,0">
+      <TextBlock Text="登录批改网" FontSize="20" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TodoTextPrimary}" />
+      <TextBlock Text="句酷批改网 · 在下方输入账号密码，登录成功后自动返回"
+                 FontSize="12" Margin="0,3,0,0"
+                 Foreground="{DynamicResource TodoTextTertiary}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Panel Grid.Row="1" Margin="16,10,16,16">
+      <controls:NativeWebView Name="PigaiWebView" IsVisible="False" />
+      <StackPanel Name="WebViewPlaceholder" VerticalAlignment="Center" Spacing="10"
+                  HorizontalAlignment="Center">
+        <TextBlock Classes="icon" Text="&#xF029;" FontSize="34"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TodoTextTertiary}" />
+        <TextBlock Text="正在准备登录页…" FontSize="13" HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TodoTextTertiary}" />
+      </StackPanel>
+    </Panel>
+  </Grid>
+</UserControl>

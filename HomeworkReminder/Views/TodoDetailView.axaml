@@ -12,15 +12,46 @@
     由宿主加返回键。空态与详情二选一，由 SelectedItem 驱动。
   -->
   <Panel>
-    <!-- 未选中 -->
+    <!-- 未选中（待办与课程都没选中时） -->
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10"
-                IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}">
+                IsVisible="{Binding !List.HasAnyContent}">
       <TextBlock Classes="icon large" Text="&#xF01C;" FontSize="34"
                  HorizontalAlignment="Center"
                  Foreground="{DynamicResource TodoTextTertiary}" />
       <TextBlock Classes="faint" Text="选择左侧任意事项查看详情"
                  HorizontalAlignment="Center" />
     </StackPanel>
+
+    <!--
+      课程详情：学习通一门课的未完成任务点明细。
+      走独立面板而不是复用待办详情——课程没有截止时间/勾选/进度那些字段。
+
+      CanShowCourseDetail 同时要求「在课程视图」且「有选中课程」：
+      只判「有选中课程」的话，一旦用户先选课程、再切到待办视图选一条作业，
+      两块详情会叠加渲染（两个面板各绑一个属性，本来就无法互斥，实际踩过）。
+      ViewModel 侧也已清选中态，这里再显式约束一次。
+    -->
+    <ScrollViewer IsVisible="{Binding CanShowCourseDetail}">
+      <StackPanel Margin="26,22" Spacing="18" DataContext="{Binding List.SelectedCourse}"
+                  x:DataType="vm:ChaoxingCourseViewModel">
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding CourseName}" FontSize="19" FontWeight="SemiBold"
+                     TextWrapping="Wrap"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+          <TextBlock Classes="meta" Text="{Binding SummaryText}" TextWrapping="Wrap" />
+          <TextBlock Classes="faint" Text="{Binding ClazzText}"
+                     IsVisible="{Binding HasClazzText}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Classes="faint" Text="{Binding LeavesHeader}" />
+          <TextBlock Text="{Binding LeavesText}" FontSize="13" TextWrapping="Wrap"
+                     LineHeight="21"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
 
     <!-- 详情 -->
     <ScrollViewer IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -64,10 +95,15 @@
                   IsChecked="{Binding IsDone, Mode=OneWay}"
                   Click="OnCheckboxClick" />
 
+        <!--
+          不做 IsVisible 守卫：MainViewModel.OpenSource 在 SourceUrl 为空时会按课程
+          回落到课程日志页，因此这条永远打得开。原先绑 ObjectConverters.IsNotNull
+          会把它藏掉，而同一条事项在列表栏的同一个按钮却是可点的——同一件事两个入口
+          行为不一致。
+        -->
         <Button Classes="primary" Content="{Binding OpenButtonText}"
                 HorizontalAlignment="Left"
-                Click="OnOpenSourceClick"
-                IsVisible="{Binding SourceUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                Click="OnOpenSourceClick" />
       </StackPanel>
     </ScrollViewer>
   </Panel>

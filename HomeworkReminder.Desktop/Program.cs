@@ -109,6 +109,74 @@ sealed class Program
         // --cookietest [秒数]：单独验证 WebView 的 Cookie 读取与清除。
         var cookieTestIndex = Array.IndexOf(args, "--cookietest");
 
+        // --detailcheck [png]：详情面板互斥回归测试
+        //   （先选课程再选待办，确认两块详情不叠加渲染）。
+        var detailCheckIndex = Array.IndexOf(args, "--detailcheck");
+        if (detailCheckIndex >= 0)
+        {
+            var png = args.Length > detailCheckIndex + 1 && !args[detailCheckIndex + 1].StartsWith('-')
+                ? args[detailCheckIndex + 1]
+                : null;
+            DetailCheck.Run(png);
+            return;
+        }
+
+        // --updatecheck [--prerelease] [--target <exe>]：检查更新，并把「用户已同意」视为真，
+        //   走与界面**完全相同**的下载 → 校验 → 替换 → 重启路径。
+        //   存在的理由：更新流程只能在真实发布版上验证，而 GUI 弹窗无法在无头环境点。
+        //   --prerelease 临时开启预发布通道（不写 settings.json，只影响本次运行）。
+        //   --target 用于把替换目标指向临时沙箱里的一份副本，避免动到真实安装目录。
+        if (args.Contains("--updatecheck"))
+        {
+            var targetIdx = Array.IndexOf(args, "--target");
+            var targetOverride = targetIdx >= 0 && args.Length > targetIdx + 1 ? args[targetIdx + 1] : null;
+            if (args.Contains("--prerelease")) AppSettings.Current.IncludePrereleaseUpdates = true;
+            Environment.Exit(RunUpdateCheck(targetOverride));
+        }
+
+        // --cxcheck：学习通任务点在线自检（用本机已保存的学习通会话真实跑一遍
+        //   课程列表 → 逐课任务点，打印未完成任务点数与明细）。只读，不改远端状态。
+        if (args.Contains("--cxcheck"))
+        {
+            Environment.Exit(ChaoxingCheck.Run());
+        }
+
+        // --pigaitest "<整条cookie>" [秒数]
+        //   批改网下游链路端到端测试：建立会话 → 关覆盖层 → 同步 → 待办出现未完成作文。
+        // --pigailogin <账号> <密码> [秒数]
+        //   批改网登录捕获链路测试：打开登录页 → 填表提交 → 轮询捕获 → 自动返回。
+        //   两种模式下凭据/cookie 都只从命令行读进内存，不落盘、不写日志。
+        var pigaiTestIndex = Array.IndexOf(args, "--pigaitest");
+        var pigaiLoginIndex = Array.IndexOf(args, "--pigailogin");
+        if (pigaiTestIndex >= 0 || pigaiLoginIndex >= 0)
+        {
+            if (pigaiTestIndex >= 0)
+            {
+                if (args.Length < pigaiTestIndex + 2)
+                {
+                    Console.WriteLine("用法：--pigaitest \"<整条cookie>\" [秒数]");
+                    Environment.Exit(2);
+                }
+
+                var secs = args.Length > pigaiTestIndex + 2
+                           && int.TryParse(args[pigaiTestIndex + 2], out var s1) ? s1 : 120;
+                PigaiFlowTest.Run(args[pigaiTestIndex + 1], null, TimeSpan.FromSeconds(secs));
+                return;
+            }
+
+            if (args.Length < pigaiLoginIndex + 3)
+            {
+                Console.WriteLine("用法：--pigailogin <账号> <密码> [秒数]");
+                Environment.Exit(2);
+            }
+
+            var secs2 = args.Length > pigaiLoginIndex + 3
+                        && int.TryParse(args[pigaiLoginIndex + 3], out var s2) ? s2 : 150;
+            PigaiFlowTest.Run(string.Empty, (args[pigaiLoginIndex + 1], args[pigaiLoginIndex + 2]),
+                TimeSpan.FromSeconds(secs2));
+            return;
+        }
+
         if (cookieTestIndex >= 0)
         {
             var cs = cookieTestIndex + 1 < args.Length && int.TryParse(args[cookieTestIndex + 1], out var cv) ? cv : 120;
@@ -377,9 +445,11 @@ sealed class Program
         // 自检时切换到「作业」视图：它同时覆盖列表行、圆形勾选框、进度徽标、
         // 导航计数与右侧详情，比默认的「我的一天」（在无当日到期项时为空白）信息量大。
         // 登录页渲染模式下没有数据，跳过。
+        // --selfcheck <png> course：改为渲染「课程」视图（课程维度任务点汇总）。
         if (vm.State == ViewModels.AppState.Ready)
         {
-            vm.SelectedNav = vm.NavItems.First(n => n.Key == "homework");
+            var navKey = Environment.GetEnvironmentVariable("HWREMINDER_SELFCHECK_NAV") ?? "homework";
+            vm.SelectedNav = vm.NavItems.FirstOrDefault(n => n.Key == navKey) ?? vm.NavItems[0];
             vm.OnNavChanged();
         }
 
@@ -448,6 +518,57 @@ sealed class Program
         if (!task.IsCompleted)
         {
             Console.WriteLine("自检：等待数据初始化超时，继续做界面自检。");
+        }
+    }
+
+    /// <summary>
+    /// 检查更新并（视为用户已同意）执行更新。返回进程退出码。
+    /// <para>
+    /// 与界面走**同一条路径**（<see cref="ViewModels.MainViewModel.RunUpdateCheckAsync"/>），
+    /// 区别只在「谁来回答那个确认框」：界面弹窗问用户，这里直接当作同意。
+    /// 这样自检验证过的流程就是用户实际会走的流程。
+    /// </para>
+    /// </summary>
+    /// <param name="targetExeOverride">
+    /// 替换目标覆盖（仅供沙箱演练）：指向临时目录里的一份 exe 副本，
+    /// 这样演练「替换 → 重启」时不会动到真实安装目录。
+    /// </param>
+    private static int RunUpdateCheck(string? targetExeOverride)
+    {
+        Console.OutputEncoding = Encoding.UTF8;
+        ViewModels.MainViewModel.PlatformServices = new DesktopPlatformServices();
+
+        Console.WriteLine($"当前版本      : {Services.UpdateService.CurrentVersion}");
+        Console.WriteLine($"替换目标      : {targetExeOverride ?? "(本进程自身)"}");
+        Console.WriteLine("正在检查更新…");
+
+        App.DeferInitialLoad = true;
+        try
+        {
+            // 更新不需要完整应用初始化（不读会话、不同步），只要一个 ViewModel 承载流程。
+            var vm = new ViewModels.MainViewModel();
+            vm.ConfirmUpdateRequested = (_, _) =>
+            {
+                // 无头模式下没有窗口可弹确认框，这里代为回答「是」。
+                Console.WriteLine("确认框        : （无头模式，视为用户同意）");
+                return Task.FromResult(true);
+            };
+
+            vm.RunUpdateCheckAsync(autoConfirmSource: "自检", targetExeOverride: targetExeOverride)
+              .GetAwaiter().GetResult();
+
+            Console.WriteLine($"状态          : {vm.UpdateStatus}");
+            if (!string.IsNullOrEmpty(vm.UpdateDownloadProgress))
+                Console.WriteLine($"下载/进度     : {vm.UpdateDownloadProgress}");
+
+            // 若走到了替换流程，应用已请求退出，这里不会再有输出。
+            // 未替换则正常返回 0（已是最新 / 用户未同意 / 无适用包）。
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"自检异常：{ex.GetType().Name}: {ex.Message}");
+            return 5;
         }
     }
 

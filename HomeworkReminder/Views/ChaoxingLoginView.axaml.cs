@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using Avalonia.Controls;
 using HomeworkReminder.Services;
 using HomeworkReminder.ViewModels;
@@ -31,7 +32,43 @@ public partial class ChaoxingLoginView : UserControl
     protected override void OnAttachedToVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+
+        // 让 ViewModel 在退出学习通时能清掉这个 WebView 内部的 Cookie。
+        // 注意不要复用雨课堂的 MainViewModel.WebViewAccessor——那是另一个 WebView。
+        MainViewModel.ChaoxingWebViewAccessor = () => ChaoxingWebView;
+
+        if (Vm is { } vm)
+        {
+            vm.PropertyChanged += OnVmPropertyChanged;
+        }
+
         NavigateIfNeeded();
+    }
+
+    protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        if (Vm is { } vm) vm.PropertyChanged -= OnVmPropertyChanged;
+    }
+
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.LoginPageOpen)) return;
+        if (Vm is not { ChaoxingLoginOpen: true }) return;
+
+        // 覆盖层重新打开时要重新导航。
+        // _navigated 原先是一次性标志，而本视图与主窗口同生命周期，导航只发生在
+        // AdapterCreated / 首次 OnAttachedToVisualTree —— 与用户是否打开覆盖层无关。
+        // 于是关掉再打开（退出登录后尤其明显）看到的是上一次残留的页面，
+        // 且不会再触发会话捕获。这里按「打开一次、导航一次」纠正。
+        _navigated = false;
+        WebViewPlaceholder.IsVisible = !_webViewReady;
+        ChaoxingWebView.IsVisible = _webViewReady;
+        NavigateIfNeeded();
+
+        // 让托管布局重跑一遍，把原生控件按最终边界重新定位（与 LoginView.ShowWebView 同理）。
+        ChaoxingWebView.InvalidateMeasure();
+        ChaoxingWebView.InvalidateArrange();
     }
 
     private void NavigateIfNeeded()

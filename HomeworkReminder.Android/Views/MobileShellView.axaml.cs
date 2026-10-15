@@ -38,16 +38,45 @@ public partial class MobileShellView : UserControl
 
     private bool _examWebReady;
 
+    /// <summary>当前挂上的 PropertyChanged 处理器；退订必须用同一个委托实例。</summary>
+    private System.ComponentModel.PropertyChangedEventHandler? _vmHandler;
+
     private MainViewModel? Vm => DataContext as MainViewModel;
 
+    /// <summary>
+    /// 订阅主界面的属性变化。
+    /// <para>
+    /// 必须能在视图销毁时退订，且不能重复订阅：<c>MainViewModel</c> 是应用级单例，
+    /// 而 <c>IActivityApplicationLifetime.MainViewFactory</c> 每次 Activity 重建/旋转
+    /// 都会 new 一个新的 MobileShellView。原先用匿名 lambda 订阅且从不退订，
+    /// 于是每个已销毁的外壳（连同整棵可视树与 NativeWebView）都被永久持有，
+    /// 处理器还会累积——一次 ExamWebUrl 变化会在所有僵尸 WebView 上跑 NavigateExamWeb。
+    /// </para>
+    /// </summary>
     private void HookVm(MainViewModel? vm)
     {
+        UnhookVm();
         if (vm is null) return;
-        vm.PropertyChanged += (_, e) =>
+
+        _vmHandler = (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.ExamWebUrl))
                 NavigateExamWeb();
         };
+        vm.PropertyChanged += _vmHandler;
+    }
+
+    private void UnhookVm()
+    {
+        if (_vmHandler is null) return;
+        if (DataContext is MainViewModel vm) vm.PropertyChanged -= _vmHandler;
+        _vmHandler = null;
+    }
+
+    protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        UnhookVm();
     }
 
     /// <summary>打开应用内答题页：先把会话 cookie 铺到 exam 子域，再导航。</summary>

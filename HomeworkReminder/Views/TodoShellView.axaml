@@ -69,6 +69,7 @@
         <Panel Grid.Row="1">
           <views:LoginView IsVisible="{Binding YktLoginOpen}" />
           <views:ChaoxingLoginView IsVisible="{Binding ChaoxingLoginOpen}" />
+          <views:PigaiLoginView IsVisible="{Binding PigaiLoginOpen}" />
         </Panel>
       </Grid>
     </Border>

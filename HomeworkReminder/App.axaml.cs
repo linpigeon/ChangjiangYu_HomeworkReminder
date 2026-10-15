@@ -39,6 +39,18 @@ public partial class App : Application
     /// </summary>
     public static Action<IClassicDesktopStyleApplicationLifetime, TimeSpan>? WebViewTestHook { get; set; }
 
+    /// <summary>
+    /// 批改网登录链路测试（<c>--pigaitest</c>）的窗口构建钩子，与
+    /// <see cref="WebViewTestHook"/> 同一模式（共享项目不能反向引用桌面头）。
+    /// </summary>
+    public static Action<IClassicDesktopStyleApplicationLifetime, TimeSpan>? PigaiTestHook { get; set; }
+
+    /// <summary>
+    /// 详情面板互斥回归测试（<c>--detailcheck</c>）的窗口构建钩子，与
+    /// <see cref="WebViewTestHook"/> 同一模式。
+    /// </summary>
+    public static Action<IClassicDesktopStyleApplicationLifetime, TimeSpan>? DetailCheckHook { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -99,8 +111,38 @@ public partial class App : Application
         MainWindow?.QuitForReal();
     }
 
+    /// <summary>
+    /// 把 UI 线程上的未处理异常写进数据目录的 startup.log。
+    /// 共享项目不能引用桌面头的 logger，这里自己写一份最小的落盘。
+    /// </summary>
+    private static void LogUnhandled(Exception ex)
+    {
+        try
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(Services.AppPaths.DataDirectory, "startup.log"),
+                $"{DateTimeOffset.Now:O} UI-UNHANDLED: {ex}{Environment.NewLine}");
+        }
+        catch (Exception)
+        {
+            // 日志写不进去也不能再抛，否则就绕回原点。
+        }
+    }
+
     public override void OnFrameworkInitializationCompleted()
     {
+        // 最后一道兜底：视图里的 async void 处理器各自已经包了 try/catch，但
+        // 「谁漏了一个」这种事无法靠 review 保证。没有这个处理器时，任何逃逸到
+        // UI 线程的异常都会直接终止进程（用户看到的是「应用突然消失」），
+        // 而不是一条可读的错误信息。
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            LogUnhandled(e.Exception);
+            // 标记为已处理：本应用没有「遇到异常必须退出」的状态，
+            // 数据同步与本地存储每次操作都是独立的，留着比崩掉好。
+            e.Handled = true;
+        };
+
         // 注意：模板原本会在这里移除 Avalonia 的 DataAnnotations 校验插件，以避免与
         // CommunityToolkit.Mvvm 重复校验。Avalonia 12 已把 BindingPlugins 改为
         // internal，且本应用的 ViewModel 派生自 ObservableObject 而非
@@ -109,6 +151,23 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // 批改网测试分支必须排在 WebView 测试之前：两者都通过
+            // WebViewTestBudget 传时间预算，先判后者会被它的 null 钩子吞掉。
+            if (DetailCheckHook is { } detailHook)
+            {
+                detailHook(desktop, WebViewTestBudget ?? TimeSpan.FromSeconds(5));
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+
+            if (PigaiTestHook is { } pigaiHook)
+            {
+                // 批改网登录链路测试模式：同样由桌面层接管窗口。
+                pigaiHook(desktop, WebViewTestBudget ?? TimeSpan.FromMinutes(3));
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+
             if (WebViewTestBudget is { } budget)
             {
                 // WebView 链路测试模式：窗口由桌面层通过钩子构建并接管。
@@ -118,6 +177,11 @@ public partial class App : Application
             }
 
             desktop.MainWindow = new MainWindow { DataContext = ViewModel };
+
+            // 安装更新后的退出走主窗口的正常退出路径：它会先持久化小组件位置再关停，
+            // 直接 Shutdown() 会让小组件位置丢失。桌面头未指派时由平台服务兜底。
+            if (desktop.MainWindow is MainWindow mainWin)
+                MainViewModel.ExitForUpdate = mainWin.QuitForReal;
 
             // 托盘图标由桌面层注入（Windows：自绘菜单）；自检等模式不创建。
             if (!DeferInitialLoad)

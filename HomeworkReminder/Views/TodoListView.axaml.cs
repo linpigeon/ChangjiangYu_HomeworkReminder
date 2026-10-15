@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -41,16 +42,24 @@ public partial class TodoListView : UserControl
     {
         if (Vm is not { } vm) return;
 
-        if (TopLevel.GetTopLevel(this) is Window w &&
-            !await MessageBox.ConfirmAsync(w, "全部标记为已读",
-                "雨课堂只提供「全部已读」接口，没有单条已读。这会把通知中心里所有未读一次清空。继续吗？"))
-            return;
-
-        var ok = await vm.MarkAllReadAsync();
-        if (!ok && TopLevel.GetTopLevel(this) is Window w2)
+        // async void：整体兜住异常，否则会直接终止进程。
+        try
         {
-            await MessageBox.ShowAsync(w2, "标记已读失败",
-                "雨课堂没有接受这次「全部已读」请求。可能是登录态已失效，或该接口有变动。");
+            if (TopLevel.GetTopLevel(this) is Window w &&
+                !await MessageBox.ConfirmAsync(w, "全部标记为已读",
+                    "雨课堂只提供「全部已读」接口，没有单条已读。这会把通知中心里所有未读一次清空。继续吗？"))
+                return;
+
+            var ok = await vm.MarkAllReadAsync();
+            if (!ok && TopLevel.GetTopLevel(this) is Window w2)
+            {
+                await MessageBox.ShowAsync(w2, "标记已读失败",
+                    "雨课堂没有接受这次「全部已读」请求。可能是登录态已失效，或该接口有变动。");
+            }
+        }
+        catch (Exception ex)
+        {
+            SidebarView.ReportHandlerFailure(vm, "标记已读", ex);
         }
     }
 
@@ -63,6 +72,14 @@ public partial class TodoListView : UserControl
         {
             _ = vm.ToggleDoneAsync(item);
         }
+    }
+
+    /// <summary>点课程行：选中它，详情栏显示未完成任务点明细。</summary>
+    private void OnCourseTapped(object? sender, TappedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        if (sender is not Border { DataContext: ChaoxingCourseViewModel course }) return;
+        vm.List.SelectedCourse = course;
     }
 
     private void OnRowTapped(object? sender, TappedEventArgs e)
