@@ -189,6 +189,68 @@ $githubRepo = 'linpigeon/ChangjiangYu_HomeworkReminder'
 $giteaApi = 'https://git.pigeon-lin.top/api/v1/repos/lin/ChangjiangYu_HomeworkReminder'
 $giteaDownload = 'https://git.pigeon-lin.top/lin/ChangjiangYu_HomeworkReminder/releases/download'
 
+# ---- ①.5 release 正文：从 CHANGELOG.md 抽取本版段落 + 追加下载表 ----
+#
+# 原先脚本**只发资产、不带正文**（`body` 字段根本没设），于是 release 页面上的说明是空的。
+# 历史 release 里 v1.3.1 / v1.3.0 有正文，是因为它们早于本脚本、正文是手工粘贴的；
+# 从脚本接管发版之后（v1.3.2 起）正文就全丢了——实测 v1.3.2 也是空的。
+# 手写正文太容易漏，这里改成自动抽取，杜绝再次出现「release 说明空白」。
+$changelogPath = Join-Path $root 'CHANGELOG.md'
+$releaseBody = ''
+if (Test-Path $changelogPath) {
+    $cl = Get-Content $changelogPath -Encoding UTF8
+    # 段落起点：`## <tag>` 形式的标题（tag 去掉 v 前缀，如 v1.4.0 -> 1.4.0）。
+    # 用 ^## 而不是 ^# ：CHANGELOG 里 h1 是被 `>` 引用的说明块，真正的版本标题是 h2。
+    $esc = [regex]::Escape($cleanTag)
+    $startIdx = -1
+    for ($i = 0; $i -lt $cl.Count; $i++) {
+        if ($cl[$i] -match "^##\s+v?$esc(\s|（|\(|$)") { $startIdx = $i; break }
+    }
+    if ($startIdx -ge 0) {
+        $endIdx = $cl.Count
+        for ($i = $startIdx + 1; $i -lt $cl.Count; $i++) {
+            if ($cl[$i] -match '^##\s') { $endIdx = $i; break }
+        }
+        $section = $cl[$startIdx..($endIdx - 1)]
+        # 去掉段尾分隔线与空行：抽出来的段落后面通常跟着 `---`。
+        while ($section.Count -gt 0) {
+            $last = $section[-1].Trim()
+            if ($last -eq '' -or $last -eq '---') { $section = $section[0..($section.Count - 2)] } else { break }
+        }
+        $releaseBody = ($section -join "`n").Trim()
+    }
+}
+
+# 下载表：各版正文里都有的格式，这里按实际产物与哈希自动生成，避免手抄出错。
+$dl = [System.Collections.Generic.List[string]]::new()
+$dl.Add('')
+$dl.Add('---')
+$dl.Add('')
+$dl.Add('### 下载')
+$dl.Add('')
+$dl.Add('| 平台 | 文件 | 说明 |')
+$dl.Add('|---|---|---|')
+$dl.Add("| Windows 10/11 x64 | ``HomeworkReminder-$Tag-win-x64.zip`` | 内含单个 ``HomeworkReminder.Desktop.exe``（$([math]::Round((Get-Item $zipPath).Length / 1MB, 2)) MB），解压即用，无需安装运行时 |")
+if ($apkPath) {
+    $dl.Add("| Android（API 23+）| ``HomeworkReminder-$Tag-android.apk`` | 使用 Android Debug 证书签名（$([math]::Round((Get-Item $apkPath).Length / 1MB, 2)) MB）；切换正式签名需先卸载 |")
+}
+$dl.Add('')
+$dl.Add('| 校验 | 值 |')
+$dl.Add('|---|---|')
+$dl.Add("| zip SHA256 | ``$((Get-FileHash $zipPath -Algorithm SHA256).Hash)`` |")
+if ($apkPath) {
+    $dl.Add("| apk SHA256 | ``$((Get-FileHash $apkPath -Algorithm SHA256).Hash)`` |")
+}
+$dl.Add('')
+$dl.Add('> 客户端「设置 → 关于 → 检查更新」依赖同一 release 里的 `update-manifest.json`，请勿单独删除该资产。')
+$releaseBody = ($releaseBody + "`n" + ($dl -join "`n")).Trim()
+
+if ($releaseBody) {
+    Write-Host "== release 正文：$(($releaseBody -split "`n").Count) 行（取自 CHANGELOG.md 的 $Tag 段落 + 下载表）=="
+} else {
+    Write-Host "== 警告：CHANGELOG.md 里找不到 $Tag 段落，release 正文将只有下载表 ==" -ForegroundColor Yellow
+}
+
 Write-Host ''
 Write-Host '== 上传 ==' -ForegroundColor Cyan
 
@@ -199,6 +261,13 @@ function Test-Release {
         return $r
     } catch { return $null }
 }
+
+# JSON 请求体必须**显式声明 UTF-8**。
+# Windows PowerShell 5.1 的 Invoke-RestMethod 在 -Body 收到 string 时按 ISO-8859-1 编码发送，
+# 中文正文会被写成乱码字节：GitHub 回 400 Bad Request、Gitea 回 422，且响应体为空、
+# 从异常信息里完全看不出原因（实测踩到过，排查了很久）。
+# 加上 charset=utf-8 后同样传 string 也正常。
+$jsonUtf8 = 'application/json; charset=utf-8'
 
 # --- GitHub ---
 # 每个源各自 try/catch：一个源失败（权限不足、限流、网络）不能阻断另一个源。
@@ -216,11 +285,16 @@ if ($env:GITHUB_TOKEN) {
         $ghRelease = Test-Release -Url "$ghApi/releases/tags/$Tag" -Headers $ghHeaders
         if (-not $ghRelease) {
             Write-Host "   GitHub: 创建 release $Tag"
-            $body = @{ tag_name = $Tag; name = $Tag; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
+            $body = @{ tag_name = $Tag; name = $Tag; body = $releaseBody; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
             $ghRelease = Invoke-RestMethod -Uri "$ghApi/releases" -Method Post -Headers $ghHeaders `
-                -ContentType 'application/json' -Body $body -TimeoutSec 60
+                -ContentType $jsonUtf8 -Body $body -TimeoutSec 60
         } else {
-            Write-Host "   GitHub: release $Tag 已存在"
+            # 已存在也要回写正文：脚本早先版本不带正文，光看「已存在」就跳过的话，
+            # 那些空正文的 release 永远补不回来（实测补 v1.4.0 时踩到）。
+            Write-Host "   GitHub: release $Tag 已存在，更新正文"
+            $body = @{ body = $releaseBody } | ConvertTo-Json
+            $ghRelease = Invoke-RestMethod -Uri "$ghApi/releases/$($ghRelease.id)" -Method Patch -Headers $ghHeaders `
+                -ContentType $jsonUtf8 -Body $body -TimeoutSec 60
         }
 
         foreach ($asset in (@($zipPath, $manifestPath) + @($apkPath | Where-Object { $_ }))) {
@@ -293,11 +367,15 @@ if ($env:GITEA_TOKEN) {
         $gtRelease = Test-Release -Url "$giteaApi/releases/tags/$Tag" -Headers $gtHeaders
         if (-not $gtRelease) {
             Write-Host "   Gitea: 创建 release $Tag"
-            $body = @{ tag_name = $Tag; name = $Tag; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
+            $body = @{ tag_name = $Tag; name = $Tag; body = $releaseBody; draft = $false; prerelease = $prereleaseFlag } | ConvertTo-Json
             $gtRelease = Invoke-RestMethod -Uri "$giteaApi/releases" -Method Post -Headers $gtHeaders `
-                -ContentType 'application/json' -Body $body -TimeoutSec 60
+                -ContentType $jsonUtf8 -Body $body -TimeoutSec 60
         } else {
-            Write-Host "   Gitea: release $Tag 已存在"
+            # 同 GitHub：已存在也回写正文，否则早先的空正文 release 补不回来。
+            Write-Host "   Gitea: release $Tag 已存在，更新正文"
+            $body = @{ body = $releaseBody } | ConvertTo-Json
+            $gtRelease = Invoke-RestMethod -Uri "$giteaApi/releases/$($gtRelease.id)" -Method Patch -Headers $gtHeaders `
+                -ContentType $jsonUtf8 -Body $body -TimeoutSec 60
         }
 
         foreach ($asset in (@($zipPath, $manifestPath) + @($apkPath | Where-Object { $_ }))) {
