@@ -314,6 +314,80 @@
     <Setter Property="Background" Value="{DynamicResource TodoAccentSoft}" />
   </Style>
 
+  <!-- ============ 课表周视图 ============ -->
+  <Style Selector="Border.tt-period">
+    <Setter Property="Background" Value="{DynamicResource TodoHover}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="2,6" />
+  </Style>
+
+  <!--
+    课块：底色/边线/文字色由 ViewModel 按课程名给出（见 Services/CourseColor），
+    所以这里只定义形状与交互，不写死颜色。
+    左侧留一条粗边线：一眼分辨课程，且不与底色抢对比度。
+  -->
+  <Style Selector="Border.tt-block">
+    <Setter Property="BorderThickness" Value="3,1,1,1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="6,4" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.tt-block:pointerover">
+    <Setter Property="Opacity" Value="0.82" />
+  </Style>
+
+  <!-- 非本周的课：整体淡化 + 虚线边，与「这周真要上」的课明显区分 -->
+  <Style Selector="Border.tt-block.otherweek">
+    <Setter Property="Opacity" Value="0.42" />
+  </Style>
+
+  <!-- 天列表头：今天用主色描边 + 淡底，光靠加粗在大屏上不够醒目 -->
+  <Style Selector="Border.tt-dayhead">
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="4,5" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.tt-dayhead TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextPrimary}" />
+  </Style>
+  <Style Selector="Border.tt-dayhead.today">
+    <Setter Property="Background" Value="{DynamicResource TodoAccentSoft}" />
+  </Style>
+  <Style Selector="Border.tt-dayhead.today TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TodoAccent}" />
+  </Style>
+
+  <!-- 顶部开关（显示非本周 / 周末）：做成小胶囊，选中态一眼可辨 -->
+  <Style Selector="ToggleButton.tt-toggle">
+    <Setter Property="Padding" Value="9,5" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TodoBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource TodoTextSecondary}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ToggleButton.tt-toggle:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoHover}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource TodoTextPrimary}" />
+  </Style>
+  <Style Selector="ToggleButton.tt-toggle:checked /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource TodoAccentSoft}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource TodoAccent}" />
+  </Style>
+
+  <!-- 课程详情浮层 -->
+  <Style Selector="Border.tt-detail">
+    <Setter Property="Background" Value="{DynamicResource TodoDialogBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TodoBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="14,12" />
+    <Setter Property="BoxShadow" Value="0 6 20 0 #33000000" />
+  </Style>
+
   <!-- ============ 分栏拖动条 ============ -->
   <Style Selector="GridSplitter.colsplit">
     <Setter Property="Background" Value="Transparent" />

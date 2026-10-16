@@ -108,6 +108,7 @@ public partial class App : Application
     {
         // 停掉自动同步并等它在途循环收尾，避免强杀后台线程留下半截写入。
         ViewModel?.AutoSync.Dispose();
+        ViewModel?.ClassReminder.Dispose();
         MainWindow?.QuitForReal();
     }
 
@@ -191,6 +192,7 @@ public partial class App : Application
             desktop.ShutdownRequested += (_, _) =>
             {
                 ViewModel?.AutoSync.Dispose();
+                ViewModel?.ClassReminder.Dispose();
                 _trayIcon?.Dispose();
             };
         }

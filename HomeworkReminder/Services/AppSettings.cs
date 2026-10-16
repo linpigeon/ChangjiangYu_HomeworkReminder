@@ -18,6 +18,16 @@ public sealed class AppSettings
     /// <summary>学期标识。202601 对应 2026-2027 学年第一学期。</summary>
     public int Term { get; set; } = 202601;
 
+    /// <summary>
+    /// 学期第一周的周一（<c>yyyy-MM-dd</c>）。空 = 未设置。
+    /// <para>
+    /// 课表用它把「第 N 周 + 星期几」换算成具体日期。教务系统的课表**只给周次**，
+    /// 具体日期必须由这个基准推出来；没有它就只能按周次展示、显示不了日期
+    /// （刻意不编造日期——假日期比没有日期更容易误导）。
+    /// </para>
+    /// </summary>
+    public string? TermStartDate { get; set; }
+
     /// <summary>待办界面壁纸图片的本地路径（null/空 = 不用壁纸，显示桌面磨砂）。</summary>
     public string? WallpaperPath { get; set; }
 
@@ -52,6 +62,28 @@ public sealed class AppSettings
 
     /// <summary>发现新作业时是否发系统通知。</summary>
     public bool NotifyOnNewHomework { get; set; } = true;
+
+    /// <summary>
+    /// 上课前多少分钟发提醒。<c>0</c> = 不提醒。
+    /// <para>
+    /// 依赖「学期第一周的周一」（<see cref="TermStartDate"/>）：课表只有周次，
+    /// 没有这个基准就算不出今天第几节是几点，也就无从提醒。
+    /// </para>
+    /// </summary>
+    public int ClassReminderMinutes { get; set; } = DefaultClassReminderMinutes;
+
+    /// <summary>默认提前 15 分钟提醒。</summary>
+    public const int DefaultClassReminderMinutes = 15;
+
+    /// <summary>提醒提前量的下限（分钟）。</summary>
+    public const int MinClassReminderMinutes = 0;
+
+    /// <summary>提醒提前量的上限（分钟）。一节课也就 45 分钟，超过 2 小时没有意义。</summary>
+    public const int MaxClassReminderMinutes = 120;
+
+    /// <summary>提醒提前量归一化：越界一律夹回合法区间（手改 settings.json 也兜得住）。</summary>
+    public static int NormalizeClassReminderMinutes(int minutes) =>
+        Math.Clamp(minutes, MinClassReminderMinutes, MaxClassReminderMinutes);
 
     /// <summary>
     /// 是否接收**预发布版**（prerelease）更新。

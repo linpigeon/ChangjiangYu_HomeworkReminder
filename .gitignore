@@ -468,3 +468,15 @@ local-state.json
 
 # 会话事件导出（可能含明文 cookie/token 等凭据，禁止入库）
 *.events.jsonl
+
+# 发布用访问令牌（Gitea / GitHub）。放在仓库根目录、以「令牌」结尾命名。
+# 这两份文件是明文凭据：**一旦入库就等于永久泄露**（git 历史不会因为后续删除而消失，
+# 且已推到远程的还会留在对方的仓库里）。这里按文件名后缀堵死，
+# 新增任何 `*令牌.txt` 都会自动被忽略，不必记得逐个补。
+*令牌.txt
+*token.txt
+*tokens.txt
+# 各类 .env（发布脚本用的 GITHUB_TOKEN / GITEA_TOKEN 也常写在这里）
+.env
+.env.*
+!.env.example

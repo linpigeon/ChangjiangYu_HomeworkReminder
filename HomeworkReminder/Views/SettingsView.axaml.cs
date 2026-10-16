@@ -49,6 +49,20 @@ public partial class SettingsView : UserControl
 
     private MainViewModel? Vm => DataContext as MainViewModel;
 
+    /// <summary>保存教务系统登录页网址（非 https 会在 ViewModel 里被拒绝并给出提示）。</summary>
+    private async void OnSaveJwUrlClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        try
+        {
+            await vm.SaveJwLoginUrlAsync();
+        }
+        catch (Exception)
+        {
+            // async void：异常逃逸会终止进程。保存失败不影响其它设置。
+        }
+    }
+
     private async void OnPickWallpaperClick(object? sender, RoutedEventArgs e)
     {
         if (Vm is not { } vm) return;
@@ -111,9 +125,50 @@ public partial class SettingsView : UserControl
         Vm?.ShowSettingsTab(1);
     }
 
-    private void OnShowAboutTabClick(object? sender, RoutedEventArgs e)
+    private void OnShowTimetableTabClick(object? sender, RoutedEventArgs e)
     {
         Vm?.ShowSettingsTab(2);
+    }
+
+    private void OnShowAboutTabClick(object? sender, RoutedEventArgs e)
+    {
+        Vm?.ShowSettingsTab(3);
+    }
+
+    // ---------------- 节次时间表编辑器 ----------------
+
+    private void OnAddPeriodClick(object? sender, RoutedEventArgs e) => Vm?.PeriodsEditor.AddPeriod();
+
+    private void OnRemovePeriodClick(object? sender, RoutedEventArgs e) => Vm?.PeriodsEditor.RemoveLast();
+
+    private void OnResetPeriodsClick(object? sender, RoutedEventArgs e) => Vm?.PeriodsEditor.ResetToDefault();
+
+    private void OnDisablePeriodClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: PeriodRowViewModel row }) Vm?.PeriodsEditor.Disable(row);
+    }
+
+    private void OnEnablePeriodClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: PeriodRowViewModel row }) Vm?.PeriodsEditor.Enable(row);
+    }
+
+    /// <summary>
+    /// 保存时间表：校验失败会在编辑器里给出具体原因（这里不再弹窗，避免两处提示打架）。
+    /// </summary>
+    private async void OnSavePeriodsClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        try
+        {
+            await vm.PeriodsEditor.SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            // async void：异常逃逸会终止进程。
+            vm.PeriodsEditor.Status = $"保存失败：{ex.Message}";
+            vm.PeriodsEditor.StatusIsError = true;
+        }
     }
 
     private void OnSaveProfileClick(object? sender, RoutedEventArgs e)

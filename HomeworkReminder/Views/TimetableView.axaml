@@ -1,0 +1,327 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:svc="using:HomeworkReminder.Services"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
+             x:Class="HomeworkReminder.Views.TimetableView"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    课表页：整页覆盖（与设置页同款，由 TimetableOpen 硬切），因为它需要宽度——
+    7 天 + 节次列挤在 400px 的列表栏里会读不清。
+
+    网格是**时间轴**，不是「等高单元格表格」：
+      行 = 节次、列 = 星期，课块用绝对像素矩形摆放（坐标由 Services/TimetableLayout 算好）。
+    这样做才能让「1-2 节」的课真的占两行高、第 3 节紧接其下；
+    若把课块塞进「起始节那一格」，格子等高就意味着跨节次的课只占一行，整张表是断的。
+    课块也因此在同一格里支持左右分栏（同一天同一节有多门课时）。
+  -->
+  <!--
+    背景用不透明的 TodoDialogBackground（与设置页同口径）：
+    课表页是整页覆盖，半透明背景会把壁纸/底下的列表透出来，正文对比度掉得很快
+    （实测：壁纸亮部压在白底课块旁，周次与时间几乎读不出来）。
+  -->
+  <Border Background="{DynamicResource TodoDialogBackground}">
+  <Grid RowDefinitions="Auto,Auto,*" ClipToBounds="True">
+    <!-- 顶部：标题 + 周次切换 + 操作 -->
+    <!-- 手机竖屏放不下这一整行（1440px 宽 @3x = 480dip），所以按钮区可横向滚动：
+         宁可让用户滑一下，也不能让「导入课表」被挤出屏幕外点不到。 -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="26,20,26,0">
+      <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="课表" FontSize="20" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+          <Border IsVisible="{Binding Timetable.IsCurrentWeekDisplayed}"
+                  Background="{DynamicResource TodoAccentSoft}" CornerRadius="3"
+                  Padding="6,1" VerticalAlignment="Center">
+            <TextBlock Text="本周" FontSize="10"
+                       Foreground="{DynamicResource TodoAccent}" />
+          </Border>
+        </StackPanel>
+        <TextBlock Text="{Binding Timetable.WeekLabel}" FontSize="12"
+                   Foreground="{DynamicResource TodoTextSecondary}" />
+      </StackPanel>
+
+      <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Disabled"
+                    HorizontalAlignment="Right" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <!--
+            返回键**放在最左**：这一段是横向滚动的，放最右时在手机上会被裁到屏幕外，
+            而它是离开课表页的唯一入口（Android 上这一页盖住了抽屉，进不去设置）。
+            宁可让「导入课表」需要滑一下，也不能让「返回」点不到。
+          -->
+          <Button Classes="tool" Click="OnCloseClick" ToolTip.Tip="返回待办">
+            <TextBlock Classes="icon" Text="&#xF00D;" />
+          </Button>
+
+          <Button Classes="tool" Click="OnPrevWeekClick" ToolTip.Tip="上一周">
+            <TextBlock Classes="icon" Text="&#xF053;" />
+          </Button>
+          <Button Classes="outline" Content="本周" Padding="10,5" FontSize="12"
+                  Click="OnCurrentWeekClick" ToolTip.Tip="跳到今天所在的周" />
+          <Button Classes="tool" Click="OnNextWeekClick" ToolTip.Tip="下一周">
+            <TextBlock Classes="icon" Text="&#xF054;" />
+          </Button>
+
+          <Border Width="1" Background="{DynamicResource TodoBorder}" Margin="4,6" />
+
+          <ToggleButton Classes="tt-toggle" IsChecked="{Binding Timetable.ShowOtherWeeks}"
+                        ToolTip.Tip="把整学期有、但本周不上的课也画出来（淡化显示并标注实际周次）">
+            <TextBlock Text="显示非本周" FontSize="12" />
+          </ToggleButton>
+          <ToggleButton Classes="tt-toggle" IsChecked="{Binding Timetable.ShowWeekend}"
+                        ToolTip.Tip="是否显示周六、周日">
+            <TextBlock Text="周末" FontSize="12" />
+          </ToggleButton>
+
+          <Button Classes="primary" Content="导入课表" Padding="10,5" FontSize="12"
+                  Click="OnImportClick" ToolTip.Tip="打开教务系统，登录后在课表页点悬浮球抓取" />
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- 提示条：下一节课 / 学期基准未配置 / 导入结果 -->
+    <StackPanel Grid.Row="1" Spacing="6" Margin="26,12,26,0">
+      <Border IsVisible="{Binding Timetable.HasNextClass}"
+              Background="{DynamicResource TodoSurface}"
+              BorderBrush="{DynamicResource TodoAccent}"
+              BorderThickness="1" CornerRadius="4" Padding="10,7">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="icon" Text="&#xF017;" FontSize="12" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TodoAccent}" />
+          <TextBlock Text="{Binding Timetable.NextClassText}" FontSize="12" TextWrapping="Wrap"
+                     Foreground="{DynamicResource TodoTextPrimary}" />
+        </StackPanel>
+      </Border>
+      <Border IsVisible="{Binding Timetable.ShowTermHint}"
+              Background="{DynamicResource TodoAccentSoft}"
+              CornerRadius="4" Padding="10,8">
+        <TextBlock FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TodoTextPrimary}"
+                   Text="未设置「学期第一周」时课表只按周次显示、不显示具体日期。到 设置 → 通用 的「学期」里填写学期第一周周一后即可显示日期。" />
+      </Border>
+      <Border IsVisible="{Binding TimetableStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              Background="{DynamicResource TodoAccentSoft}"
+              CornerRadius="4" Padding="10,8">
+        <TextBlock Text="{Binding TimetableStatus}" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TodoTextPrimary}" />
+      </Border>
+    </StackPanel>
+
+    <!--
+      网格：左侧节次刻度固定，右侧 7 天可纵横滚动。
+      **两个表头必须在同一行**：节次刻度列原本自带一个「节次」表头、7 天区域自带星期表头，
+      两个表头各自成行时高度不同（「节次」一行 vs「周一 / 10-12」两行），
+      于是两边的主体起始位置差了整整一个表头高度差——
+      实测课块比节次刻度低 12.8px，课块与时间表整体错位。
+      把两个表头放进同一个 Grid 行，行高由内容取大者决定，两边主体天然对齐。
+    -->
+    <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="26,14,26,16">
+
+      <!-- 表头行：节次标题 + 星期列头（横向跟随网格滚动） -->
+      <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
+        <TextBlock Grid.Column="0" Text="节次" FontSize="11"
+                   Width="{x:Static vm:TimetableViewModels.PeriodColumnWidth}"
+                   TextAlignment="Center" VerticalAlignment="Bottom"
+                   Margin="0,0,6,10" Foreground="{DynamicResource TodoTextTertiary}" />
+        <ScrollViewer Grid.Column="1" Name="DayHeaderScroll" Margin="0,0,0,8"
+                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                      IsHitTestVisible="False">
+          <ItemsControl Name="DayHeaderItems" ItemsSource="{Binding Timetable.DayHeaders}"
+                        Width="{Binding Timetable.DaysWidth}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Rows="1" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TimetableDayHeaderViewModel">
+                <Border Classes="tt-dayhead" Classes.today="{Binding IsToday}" Margin="2,0">
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="{Binding DayName}" FontSize="12" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding DateText}" FontSize="10"
+                               IsVisible="{Binding HasDate}"
+                               HorizontalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+
+      <!-- 主体行：节次刻度（随网格纵向滚动） + 课块画布 -->
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+        <!-- 节次刻度列：纵向与网格同步（见 TimetableView.SyncVertical） -->
+        <ScrollViewer Grid.Column="0" Name="PeriodScroll" VerticalScrollBarVisibility="Hidden"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalAlignment="Top"
+                      Width="{x:Static vm:TimetableViewModels.PeriodColumnWidth}"
+                      Margin="0,0,6,0">
+          <ItemsControl Name="PeriodItems" ItemsSource="{Binding Timetable.Periods}"
+                        Height="{Binding Timetable.GridHeight}"
+                        VerticalAlignment="Top">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TimetablePeriodViewModel">
+                <Border Classes="tt-period" Height="{Binding Height}"
+                        Width="{Binding $parent[ItemsControl].Bounds.Width}">
+                  <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="1">
+                    <TextBlock Text="{Binding Label}" FontSize="13" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TodoTextPrimary}" />
+                    <TextBlock Text="{Binding TimeText}" FontSize="9"
+                               IsVisible="{Binding HasTime}"
+                               TextWrapping="NoWrap"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TodoTextTertiary}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <!-- 课块画布 -->
+        <ScrollViewer Grid.Column="1" Name="GridScroll"
+                      VerticalAlignment="Top"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+          <ItemsControl Name="BlockItems" ItemsSource="{Binding Timetable.Blocks}"
+                        Width="{Binding Timetable.DaysWidth}"
+                        Height="{Binding Timetable.GridHeight}"
+                        VerticalAlignment="Top"
+                        Background="Transparent">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TimetableBlockViewModel">
+                <Border Classes="tt-block" Classes.otherweek="{Binding IsOtherWeek}"
+                        Width="{Binding Width}" Height="{Binding Height}"
+                        Background="{Binding Fill}"
+                        BorderBrush="{Binding Line}"
+                        PointerPressed="OnBlockPressed">
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
+                               TextWrapping="Wrap" MaxLines="3"
+                               Foreground="{Binding TextColor}" />
+                    <TextBlock Text="{Binding Location}" FontSize="10"
+                               IsVisible="{Binding CanShowLocation}"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{Binding TextColor}" Opacity="0.85" />
+                    <TextBlock Text="{Binding WeekBadge}" FontSize="9"
+                               IsVisible="{Binding IsOtherWeek}"
+                               Foreground="{Binding TextColor}" Opacity="0.85" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Grid>
+
+    <!--
+      空状态：整周没课时给一句说明。
+      **必须限制在课块区域内**：铺满整行时它会压在星期列头与节次刻度上
+      （窄屏上实测正好糊住「第 3 节」那几行）。
+      **左边距由代码后置按实测值写**（TimetableView.ApplyEmptyStateBounds）：
+      先写过 `Margin="94"`（手算 26+68，刻度列实际占 74）→ 多伸出 6dp 切进刻度列；
+      再改成绑定 `ElementName=PeriodScroll` 的宽度 → **真机上没生效**
+      （设备实测叠加层左边缘仍在 x=308px = 77dp，压在节次块 x=104..375px 上）。
+      绑定的求值时机不可靠，改为在 LayoutUpdated 里拿实测 Bounds 直接写。
+    -->
+    <Border Grid.Row="2" Name="EmptyStateBox"
+            Background="{DynamicResource TodoAccentSoft}"
+            CornerRadius="4" Padding="14,10"
+            HorizontalAlignment="Stretch" VerticalAlignment="Center"
+            IsVisible="{Binding !Timetable.HasBlocks}">
+      <TextBlock Classes="faint" FontSize="12" TextWrapping="Wrap"
+                 TextAlignment="Center"
+                 Text="本周没有课。若是首次使用，请点右上角「导入课表」；也可能是其它周次的课——可打开「显示非本周」查看。" />
+    </Border>
+
+    <!--
+      课程详情：点课块弹出，点别处关闭。
+      **用 ContentControl 承载而不是直接绑 Timetable.SelectedBlock.XXX**：
+      没选中时 SelectedBlock 是 null，直接绑它会让每个子控件的绑定都报
+      「Value is null」——IsVisible=false 并不阻止绑定求值，日志会被刷满
+      （实测每帧十条）。改成 ContentControl 后详情只在有选中时才实例化，
+      模板里的 DataContext 就是那个课块，绑定天然不会落空。
+    -->
+    <ContentControl Grid.Row="2" Content="{Binding Timetable.SelectedBlock}"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,34,26" IsTabStop="False">
+      <ContentControl.ContentTemplate>
+        <DataTemplate x:DataType="vm:TimetableBlockViewModel">
+          <!--
+            详情面板宽度由代码后置按实测值写（TimetableView.ApplyDetailCardWidth）：
+            先写过固定 Width=296 —— 320dp 手机上左边缘落到 -10dp，整块被切；
+            再改成绑定 ElementName=GridScroll 的宽度 —— 与空状态那条一样，
+            **同类绑定在真机上不生效**，所以统一收敛到代码后置的实测计算。
+            MaxWidth=296 只作宽屏版式上限，与代码后置算出的宽度取小。
+          -->
+          <Border Classes="tt-detail" MaxWidth="296">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding Name}"
+                           FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TodoTextPrimary}" />
+                <Button Grid.Column="1" Classes="tool" Click="OnCloseDetailClick" ToolTip.Tip="关闭">
+                  <TextBlock Classes="icon" Text="&#xF00D;" FontSize="11" />
+                </Button>
+              </Grid>
+
+              <Border Background="{Binding Fill}" BorderBrush="{Binding Line}"
+                      BorderThickness="1" CornerRadius="3" Padding="8,6">
+                <TextBlock Text="{Binding TimeText}" FontSize="12" Foreground="{Binding TextColor}" />
+              </Border>
+
+              <StackPanel Spacing="5">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <TextBlock Classes="icon" Text="&#xF017;" FontSize="11" Width="14"
+                             VerticalAlignment="Center" Foreground="{DynamicResource TodoTextTertiary}" />
+                  <TextBlock FontSize="12" Foreground="{DynamicResource TodoTextPrimary}"
+                             Text="{Binding PeriodText}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="7" IsVisible="{Binding HasDetail}">
+                  <TextBlock Classes="icon" Text="&#xF3C5;" FontSize="11" Width="14"
+                             VerticalAlignment="Center" Foreground="{DynamicResource TodoTextTertiary}" />
+                  <TextBlock FontSize="12" TextWrapping="Wrap" MaxWidth="240"
+                             Foreground="{DynamicResource TodoTextPrimary}"
+                             Text="{Binding DetailText}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <TextBlock Classes="icon" Text="&#xF073;" FontSize="11" Width="14"
+                             VerticalAlignment="Center" Foreground="{DynamicResource TodoTextTertiary}" />
+                  <TextBlock FontSize="12" Foreground="{DynamicResource TodoTextPrimary}"
+                             Text="{Binding WeekText}" />
+                </StackPanel>
+              </StackPanel>
+
+              <Border IsVisible="{Binding IsOtherWeek}"
+                      Background="{DynamicResource TodoWarningBackground}"
+                      BorderBrush="{DynamicResource TodoWarningBorder}"
+                      BorderThickness="1" CornerRadius="3" Padding="8,6">
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TodoTextPrimary}"
+                           Text="本周不上这门课。它只在上面标注的周次上课。" />
+              </Border>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
+  </Grid>
+  </Border>
+</UserControl>

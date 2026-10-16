@@ -28,4 +28,15 @@
     <!-- 登录页内嵌雨课堂官方登录页，需要 WebView 控件。 -->
     <PackageReference Include="Avalonia.Controls.WebView" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      教务课表解析的回归样本：从真实教务页（珠海科技学院正方系统）抓下来的课表表格片段。
+      离线自检（jsoncheck）用它验证「真机抓到的页面能被解析出课程」；这一条曾经整条失效
+      （InvokeScript 的 JSON 壳没拆，标记压根进不了解析器），离线样本是唯一的防复发手段。
+    -->
+    <None Include="..\docs\fixtures\zcst-kblist-table.html"
+          Link="fixtures\zcst-kblist-table.html"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -265,8 +265,16 @@ HomeworkReminder/                 共享项目：模型、服务、视图、View
     AppJsonContext.cs             源生成 JSON 序列化上下文
     AutoSyncService.cs            定时同步 + 新作业判定（可脱离 UI 测试）
     Notifier.cs / WinRtToast.cs   系统通知抽象与 WinRT COM 互操作
+    ---- 课表（教务系统导入）----
+    Timetable.cs                  课表纯逻辑：节次时间表、单双周、周次换算、按周展开
+    ZhengfangParser.cs            正方教务课表解析内核（kbList JSON / 列表视图 / 网格兜底）
+    ZhengfangHtml.cs              课表页的轻量 HTML 抽取（去标签、实体、表格、课块）
+    ScheduleStore.cs              schedule.json 读写与逐条校验
+    ScheduleMerge.cs              合并导入（匹配键去重、事务式、不删既有）
+    JwCaptureService.cs           教务页悬浮球注入与一键抓取
   Views/                          MainWindow / TodoShellView / LoginView
                                   ChaoxingLoginView / PigaiLoginView
+                                  TimetableView（周视图网格）/ JwImportView（教务导入）
                                   WidgetView + WidgetWindow（桌面小组件）
   Styles/TodoTheme.axaml          仿 To Do 的 Fluent 控件样式（含深色主题）
   Styles/WidgetTheme.axaml        桌面小组件的深色半透明样式
@@ -279,6 +287,7 @@ docs/                             接口实测文档与调研记录
   界面设计规格.md                   ★ 界面设计规格（色板/令牌/控件/布局/响应式），可照此复刻
   数据源获取逻辑.md                本项目的整体架构与同步流程
   学习通状态探测.md                学习通任务点/作业/考试状态的探测定论
+  教务课表导入.md                  ★ 正方课表解析口径、与 Electron 参照实现的差异、安全边界
 ```
 
 ## 开发

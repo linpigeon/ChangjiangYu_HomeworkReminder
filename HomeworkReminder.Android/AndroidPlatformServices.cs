@@ -30,6 +30,29 @@ internal sealed class AndroidPlatformServices : IPlatformServices
     }
 
     /// <summary>
+    /// 把雨课堂主域的会话 cookie 铺到移动答题页所在的子域。
+    /// <para>
+    /// <c>sessionid</c> 是 <c>changjiang.yuketang.cn</c> 的 cookie；移动答题页在
+    /// <c>changjiang-exam</c> 子域，域名不同的 host-only cookie 不会自动带过去。
+    /// </para>
+    /// </summary>
+    public void PrepareExamWebSession()
+    {
+        try
+        {
+            var cm = global::Android.Webkit.CookieManager.Instance;
+            var raw = cm?.GetCookie("https://changjiang.yuketang.cn");
+            if (cm is null || string.IsNullOrEmpty(raw)) return;
+            cm.SetCookie("https://changjiang-exam.yuketang.cn", raw);
+            cm.Flush();
+        }
+        catch (Exception)
+        {
+            // 铺 cookie 失败的最坏结果是答题页要求重新登录，不该把外壳拖崩。
+        }
+    }
+
+    /// <summary>
     /// 拉起雨课堂 App。雨课堂只注册了 <c>app://yuketang</c> 这一个深链入口
     /// （manifest 里没有 https applinks）；试卷类作业的路由参数按它推送通知的
     /// 内部路由格式附带（exam?classroomId=..&amp;examId=..）——当前版本实测只解析不跳转，

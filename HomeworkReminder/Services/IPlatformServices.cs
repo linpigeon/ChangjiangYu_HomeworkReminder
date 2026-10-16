@@ -26,6 +26,19 @@ public interface IPlatformServices
     bool OpenInYktApp(string url) => false;
 
     /// <summary>
+    /// 打开应用内答题页**之前**的会话铺开（把雨课堂主域的 cookie 复制到答题子域）。
+    /// <para>
+    /// 存在的理由：移动外壳 <c>MobileShellView</c> 原本直接调用 Android 的
+    /// <c>CookieManager</c>，于是它**只能编译进 Android 头**——而界面遮挡审计
+    /// （<c>--androidcheck</c>，在桌面头离屏渲染手机尺寸）恰恰需要编译这同一个外壳。
+    /// 把平台专属的那一句抽到这里，外壳就能留在共享项目里，两边编译的是同一份代码
+    /// （否则审计的是副本，改一处漏一处，正是本仓库反复踩过的坑）。
+    /// </para>
+    /// <para>默认空实现：桌面/其它平台没有跨子域 cookie 这回事。</para>
+    /// </summary>
+    void PrepareExamWebSession() { }
+
+    /// <summary>
     /// 「为安装更新而退出应用」。
     /// <para>
     /// 实现方应重写到本平台**正常的退出路径**上：桌面头要在退出前持久化小组件位置

@@ -35,10 +35,20 @@
     <Grid Grid.Column="2">
       <!-- 待办区：列表 + 分隔条 + 详情 -->
       <Grid x:Name="TodoPane"
-            IsVisible="{Binding !SettingsOpen}"
-            Classes.pagefadein="{Binding !SettingsOpen}">
+            IsVisible="{Binding ShowTodoPane}"
+            Classes.pagefadein="{Binding ShowTodoPane}">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="400" MinWidth="220" />
+          <!--
+            列表栏用 `*` + MaxWidth，而不是固定 400；**MaxWidth 由代码后置按记忆宽度写入**。
+            「固定 400」在窄窗口上会把详情栏整体挤出窗口：
+            实测（androidcheck desktop，960x760 这个最小桌面尺寸）
+            列表 400 + 分隔条 5 + 详情 MinWidth 280 = 685，大于外层可用的 664，
+            详情栏被顶到 x=952.8、右边缘 1232.8，**超出窗口 272.8dp**——
+            半个详情面板画在窗口外，而外层 Grid 没有 ClipToBounds，只能靠肉眼发现。
+            改为「上限 = 记忆宽度」后：宽窗口按记忆宽度（默认 400）分配，
+            窗口变窄时自动收窄，用户拖动后上限跟着更新（见 ApplyWidths）。
+          -->
+          <ColumnDefinition Width="*" MinWidth="220" />
           <ColumnDefinition Width="5" />
           <ColumnDefinition Width="*" MinWidth="280" />
         </Grid.ColumnDefinitions>
@@ -51,6 +61,17 @@
       <!-- 设置页：与待办区同格叠加（内嵌页面，不是弹窗） -->
       <views:SettingsView IsVisible="{Binding SettingsOpen}"
                           Classes.pagefadein="{Binding SettingsOpen}" />
+
+      <!--
+        课表页：同样是整页覆盖。之所以不复用中间那 400px 的列表栏——
+        7 天 + 节次列挤在 400px 里读不清，网格需要宽度。
+      -->
+      <views:TimetableView IsVisible="{Binding TimetableOpen}"
+                           Classes.pagefadein="{Binding TimetableOpen}" />
+
+      <!-- 教务导入页：盖在课表页之上（从课表页的「导入课表」进入） -->
+      <views:JwImportView IsVisible="{Binding JwImportOpen}"
+                          Classes.pagefadein="{Binding JwImportOpen}" />
     </Grid>
 
     <!-- 登录覆盖层（雨课堂 / 学习通，从设置页「账号」进入；启动不再弹登录） -->

@@ -4,9 +4,17 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using HomeworkReminder.ViewModels;
 
-namespace HomeworkReminder.Android.Views;
+namespace HomeworkReminder.Views;
 
-/// <summary>Android 外壳（抽屉式移动布局）的交互。</summary>
+/// <summary>
+/// Android 外壳（抽屉式移动布局）的交互。
+/// <para>
+/// 位于共享项目（而非 Android 头）：界面遮挡审计 <c>--androidcheck</c> 在桌面头
+/// 离屏渲染手机尺寸，必须编译**同一个**外壳才能验到真实的层叠与返回栏。
+/// 唯一平台专属的那句（铺答题页 cookie）已抽成
+/// <see cref="Services.IPlatformServices.PrepareExamWebSession"/>。
+/// </para>
+/// </summary>
 public partial class MobileShellView : UserControl
 {
     public MobileShellView()
@@ -77,6 +85,53 @@ public partial class MobileShellView : UserControl
     {
         base.OnDetachedFromVisualTree(e);
         UnhookVm();
+        UnhookBackRequested();
+    }
+
+    private Avalonia.Controls.TopLevel? _hookedTopLevel;
+
+    /// <summary>
+    /// 接管系统返回键（<see cref="Avalonia.Controls.TopLevel.BackRequested"/>）：
+    /// 由内到外关掉一层全屏覆盖，都关完了才让系统处理（退出应用）。
+    /// <para>
+    /// <b>为什么必须接管</b>：课表页是整页覆盖，会把抽屉（进设置的唯一入口）一起盖住。
+    /// 不接管的话，用户在课表页按返回会直接退出应用——既回不到列表，也进不了设置。
+    /// 桌面端有表头上的返回按钮，手机端返回键才是主要返回方式。
+    /// </para>
+    /// <para>
+    /// 必须在 <c>AttachedToVisualTree</c> 里挂：构造函数执行时还没挂上可视树，
+    /// <c>TopLevel.GetTopLevel(this)</c> 拿不到宿主窗口。
+    /// </para>
+    /// </summary>
+    protected override void OnAttachedToVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        UnhookBackRequested();
+        if (Avalonia.Controls.TopLevel.GetTopLevel(this) is { } top)
+        {
+            _hookedTopLevel = top;
+            top.BackRequested += OnBackRequested;
+        }
+    }
+
+    private void UnhookBackRequested()
+    {
+        if (_hookedTopLevel is null) return;
+        _hookedTopLevel.BackRequested -= OnBackRequested;
+        _hookedTopLevel = null;
+    }
+
+    private void OnBackRequested(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+
+        // 顺序与叠放层次一致（后加的在上）：登录页 → 答题页 → 设置 → 详情 → 课表 → 抽屉。
+        if (vm.LoginPageOpen is not null) { vm.CloseLoginPage(); e.Handled = true; return; }
+        if (vm.ExamWebUrl is not null) { vm.CloseExamWeb(); e.Handled = true; return; }
+        if (vm.SettingsOpen) { vm.SettingsOpen = false; e.Handled = true; return; }
+        if (vm.SelectedItem is not null) { vm.SelectedItem = null; e.Handled = true; return; }
+        if (vm.TimetableOpen) { vm.CloseTimetable(); e.Handled = true; return; }
+        if (vm.DrawerOpen) { vm.DrawerOpen = false; e.Handled = true; }
     }
 
     /// <summary>打开应用内答题页：先把会话 cookie 铺到 exam 子域，再导航。</summary>
@@ -85,15 +140,10 @@ public partial class MobileShellView : UserControl
         // WebView 适配器异步创建，未就绪时等 AdapterCreated 再导航。
         if (!_examWebReady || Vm?.ExamWebUrl is not { } url) return;
 
-        // sessionid 是 changjiang.yuketang.cn 的 cookie；移动答题页在 changjiang-exam
-        // 子域，域名不同的 host-only cookie 不会自动带过去——显式铺一份。
-        var cm = global::Android.Webkit.CookieManager.Instance;
-        var raw = cm?.GetCookie("https://changjiang.yuketang.cn");
-        if (cm is not null && !string.IsNullOrEmpty(raw))
-        {
-            cm.SetCookie("https://changjiang-exam.yuketang.cn", raw);
-            cm.Flush();
-        }
+        // 平台专属动作（Android：changjiang → changjiang-exam 子域铺 cookie）。
+        // 放平台钩子里而不是 if (OperatingSystem.IsAndroid())：共享项目里不该出现
+        // Android 的 CookieManager，否则本文件又只能编译进 Android 头。
+        MainViewModel.PlatformServices?.PrepareExamWebSession();
 
         ExamWebView.Navigate(new Uri(url));
     }

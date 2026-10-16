@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HomeworkReminder.Models;
 
 namespace HomeworkReminder.Services;
 
@@ -60,6 +61,16 @@ namespace HomeworkReminder.Services;
 [JsonSerializable(typeof(ReleaseAsset))]
 [JsonSerializable(typeof(List<ReleaseAsset>))]
 [JsonSerializable(typeof(UpdateManifest))]
+// ---- 课表（教务系统导入）----
+[JsonSerializable(typeof(ScheduleFile))]
+[JsonSerializable(typeof(ScheduleItem))]
+[JsonSerializable(typeof(List<ScheduleItem>))]
+[JsonSerializable(typeof(PeriodSlot))]
+[JsonSerializable(typeof(List<PeriodSlot>))]
+[JsonSerializable(typeof(JwProfile))]
+// 正方课表 JSON 直取路径（xskbcx_cxXsKb 的 kbList）。
+[JsonSerializable(typeof(ZhengfangKbRow))]
+[JsonSerializable(typeof(List<ZhengfangKbRow>))]
 // internal：上下文包含 internal 的 SessionStore.ProtectedEnvelope，
 // public 上下文会导致生成代码的可访问性不一致（CS0053）。全部使用点都在本程序集内。
 internal partial class AppJsonContext : JsonSerializerContext;

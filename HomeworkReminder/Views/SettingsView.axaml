@@ -1,16 +1,21 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:views="using:HomeworkReminder.Views"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="640"
              x:Class="HomeworkReminder.Views.SettingsView"
              x:DataType="vm:MainViewModel">
 
+  <UserControl.Resources>
+    <views:StatusBrushConverter x:Key="ErrorToBrush" />
+  </UserControl.Resources>
+
   <!--
     设置页（主界面内嵌，不再是浮层/小窗口）。
     桌面：占三栏布局的中右两栏；手机：由宿主加返回键全屏覆盖。
-    页内分「设置 / 关于」两个二级选项卡，IsVisible 切换 + 淡入动画。
+    页内分「设置 / 账号 / 课表 / 关于」四个二级选项卡，IsVisible 切换 + 淡入动画。
     内容一律靠左对齐、紧跟选项卡下方，不居中。
     桌面专属项（关闭行为、桌面小组件）在 Android 上隐藏。
 
@@ -26,10 +31,12 @@
       <!-- 二级选项卡 -->
       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4" Margin="26,10,26,0">
         <Button Classes="settab" Classes.active="{Binding SettingsTab0Active}"
-                Content="设置" Click="OnShowSettingsTabClick" />
+                Content="通用" Click="OnShowSettingsTabClick" />
         <Button Classes="settab" Classes.active="{Binding SettingsTab1Active}"
                 Content="账号" Click="OnShowAccountTabClick" />
         <Button Classes="settab" Classes.active="{Binding SettingsTab2Active}"
+                Content="课表" Click="OnShowTimetableTabClick" />
+        <Button Classes="settab" Classes.active="{Binding SettingsTab3Active}"
                 Content="关于" Click="OnShowAboutTabClick" />
       </StackPanel>
 
@@ -97,6 +104,26 @@
               <TextBlock FontSize="11" TextWrapping="Wrap"
                          Foreground="{DynamicResource TodoTextTertiary}"
                          Text="每隔多少分钟自动同步一次作业并发新作业提醒；0 = 关闭自动同步。非 0 时最小 5 分钟，改后立刻生效。" />
+
+              <!-- 上课提醒：与「新作业提醒」同属于「什么时候打扰用户」，放在一起 -->
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" Text="距上课前提醒" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <NumericUpDown Minimum="0" Maximum="120" FormatString="0" Width="130"
+                                 Value="{Binding ClassReminderMinutes, Mode=TwoWay}" />
+                  <TextBlock Text="分钟" FontSize="12" VerticalAlignment="Center"
+                             Foreground="{DynamicResource TodoTextTertiary}" />
+                </StackPanel>
+              </Grid>
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         Text="上课前多少分钟发系统通知（0 = 不提醒，最多 120 分钟）。已开始的课不会补提醒。需要「学期第一周的周一」才能算出今天几点上课。" />
+              <!-- 前提不满足时把原因说出来，否则用户只会觉得提醒坏了 -->
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding HasClassReminderHint}"
+                         Foreground="{DynamicResource TodoWarningBorder}"
+                         Text="{Binding ClassReminderHint}" />
             </StackPanel>
 
             <!-- 学期 -->
@@ -120,6 +147,17 @@
               <TextBlock FontSize="11" TextWrapping="Wrap"
                          Foreground="{DynamicResource TodoTextTertiary}"
                          Text="课程按学期过滤（学年起始年 + 学期）。切换学期会清空本地缓存并全量重新同步，首次同步较慢属正常。" />
+
+              <!-- 学期第一周：课表把「第 N 周」换算成具体日期要靠它 -->
+              <StackPanel Spacing="6">
+                <TextBlock Text="学期第一周的周一" FontSize="12"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <TextBox Text="{Binding TermStartDateInput, Mode=TwoWay}" Width="150"
+                         HorizontalAlignment="Left" PlaceholderText="2026-09-07" />
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TodoTextTertiary}"
+                           Text="格式 2026-09-07（必须是周一）。课表用周次表示，没有这个基准就只显示周次、不显示日期。" />
+              </StackPanel>
             </StackPanel>
 
             <!-- 关闭行为（仅桌面） -->
@@ -193,6 +231,29 @@
                       HorizontalAlignment="Left" Click="OnSaveProfileClick" />
             </StackPanel>
 
+            <!-- 教务系统（课表导入用）：网址属于「账号/凭据」范畴，与其它登录入口放在一起 -->
+            <StackPanel Spacing="12">
+              <TextBlock Text="教务系统（课表导入）" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <StackPanel Spacing="6">
+                <TextBlock Text="教务系统登录页网址" FontSize="12"
+                           Foreground="{DynamicResource TodoTextSecondary}" />
+                <TextBox Text="{Binding JwLoginUrlInput, Mode=TwoWay}" MinWidth="320"
+                         HorizontalAlignment="Left"
+                         PlaceholderText="https://jw.example.edu.cn/" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="outline" Content="保存网址" Padding="10,5" FontSize="12"
+                          Click="OnSaveJwUrlClick" />
+                  <TextBlock Text="{Binding TimetableStatus}" FontSize="11"
+                             VerticalAlignment="Center" TextWrapping="Wrap"
+                             Foreground="{DynamicResource TodoTextTertiary}" />
+                </StackPanel>
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TodoTextTertiary}"
+                           Text="填学校教务系统（正方等）的登录页地址。导入时在内嵌窗口里自行登录并进入课表查询页，再点页面右下角的蓝色按钮抓取——本工具不代填账号、不代提交。" />
+              </StackPanel>
+            </StackPanel>
+
             <!-- 雨课堂 -->
             <StackPanel Spacing="12">
               <TextBlock Text="雨课堂（长江雨课堂）" FontSize="14" FontWeight="SemiBold"
@@ -250,9 +311,82 @@
           </StackPanel>
         </ScrollViewer>
 
-        <!-- 关于 -->
-        <ScrollViewer x:Name="AboutTabScroller" IsVisible="{Binding SettingsTab2Active}"
+        <!-- 课表（原「关于」之前，索引 2） -->
+        <ScrollViewer x:Name="TimetableTabScroller" IsVisible="{Binding SettingsTab2Active}"
                       Classes.pagefadein="{Binding SettingsTab2Active}"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel HorizontalAlignment="Left" Spacing="22"
+                      MaxWidth="{Binding Bounds.Width, ElementName=TimetableTabScroller}">
+
+            <!-- 节次时间表 -->
+            <StackPanel Spacing="10">
+              <TextBlock Text="节次时间表" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TodoTextPrimary}" />
+              <TextBlock FontSize="11" TextWrapping="Wrap"
+                         Foreground="{DynamicResource TodoTextTertiary}"
+                         Text="教务系统只给「第几节」，具体几点由这张表推导——周视图、待办提醒三处都用它，改这里等于全校正。各校作息不同，按自己学校填。" />
+
+              <!-- 说明：00:00 是停用哨兵，必须写清楚，否则用户不知道该怎么停用某节 -->
+              <Border Background="{DynamicResource TodoAccentSoft}" CornerRadius="4" Padding="10,8">
+                <TextBlock FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TodoTextPrimary}"
+                           Text="起止时间都填 00:00 表示该节停用：整天不排课、也不参与时间先后与重叠校验。学校的作息与默认值不同（例如某天只有 11 节、晚上 21:00 就结束）时，改时间或停用即可，不必删节次。" />
+              </Border>
+
+              <ItemsControl ItemsSource="{Binding PeriodsEditor.Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PeriodRowViewModel">
+                    <Grid ColumnDefinitions="64,116,18,116,Auto,Auto" ColumnSpacing="6" Margin="0,3">
+                      <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12"
+                                 Foreground="{DynamicResource TodoTextSecondary}"
+                                 Text="{Binding Period, StringFormat='第 {0} 节'}" />
+                      <TextBox Grid.Column="1" Text="{Binding StartTime, Mode=TwoWay}"
+                               FontSize="12" PlaceholderText="08:00" />
+                      <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                 FontSize="12" Foreground="{DynamicResource TodoTextTertiary}" Text="—" />
+                      <TextBox Grid.Column="3" Text="{Binding EndTime, Mode=TwoWay}"
+                               FontSize="12" PlaceholderText="08:45" />
+                      <TextBlock Grid.Column="4" VerticalAlignment="Center" FontSize="11" Margin="6,0,0,0"
+                                 IsVisible="{Binding HasDisabledHint}"
+                                 Foreground="{DynamicResource TodoTextTertiary}"
+                                 Text="{Binding DisabledHint}" />
+                      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4">
+                        <Button Classes="tool" Content="停用" Padding="8,3" FontSize="11"
+                                Click="OnDisablePeriodClick"
+                                IsVisible="{Binding !IsDisabled}"
+                                ToolTip.Tip="把这一节设为 00:00-00:00（停用）" />
+                        <Button Classes="tool" Content="启用" Padding="8,3" FontSize="11"
+                                Click="OnEnablePeriodClick"
+                                IsVisible="{Binding IsDisabled}"
+                                ToolTip.Tip="恢复这一节的时间" />
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="outline" Content="新增一节" Padding="10,5" FontSize="12"
+                        Click="OnAddPeriodClick" />
+                <Button Classes="outline" Content="删除末节" Padding="10,5" FontSize="12"
+                        Click="OnRemovePeriodClick" />
+                <Button Classes="outline" Content="恢复默认" Padding="10,5" FontSize="12"
+                        Click="OnResetPeriodsClick" />
+                <Button Classes="primary" Content="保存时间表" Padding="12,5" FontSize="12"
+                        Click="OnSavePeriodsClick" />
+              </StackPanel>
+
+              <!-- 校验失败要显眼：写坏时间表会让整张课表的时间都错 -->
+              <TextBlock FontSize="12" TextWrapping="Wrap" IsVisible="{Binding PeriodsEditor.HasStatus}"
+                         Text="{Binding PeriodsEditor.Status}"
+                         Foreground="{Binding PeriodsEditor.StatusIsError, Converter={StaticResource ErrorToBrush}}" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- 关于 -->
+        <ScrollViewer x:Name="AboutTabScroller" IsVisible="{Binding SettingsTab3Active}"
+                      Classes.pagefadein="{Binding SettingsTab3Active}"
                       HorizontalScrollBarVisibility="Disabled">
           <StackPanel HorizontalAlignment="Left" Spacing="22"
                       MaxWidth="{Binding Bounds.Width, ElementName=AboutTabScroller}">

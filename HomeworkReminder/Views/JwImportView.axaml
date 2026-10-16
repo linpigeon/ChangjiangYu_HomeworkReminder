@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkReminder.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="HomeworkReminder.Views.JwImportView"
+             x:DataType="vm:MainViewModel"
+             Background="{Binding SurfaceBrush}">
+
+  <!--
+    教务课表导入的**控制面板**。
+    真正的教务系统网页在一个**独立弹窗**里（NativeWebDialog）——
+    与「长江雨课堂登录」同款形态：弹窗浮在应用之上，不与应用内容挤在同一块区域。
+
+    面板本身因此不再承载 WebView，只负责：说明、状态、手动触发、回到课表的入口。
+    手动按钮是悬浮球之外的第二条路径：若注入被页面结构挡住，用户仍有办法抓取。
+  -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="26,20,26,0">
+      <StackPanel Grid.Column="0" Spacing="3">
+        <TextBlock Text="导入教务课表" FontSize="20" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TodoTextPrimary}" />
+        <TextBlock Text="教务系统已在独立窗口中打开；登录并进入「课表查询」页后，点窗口右下角的蓝色按钮抓取"
+                   FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TodoTextSecondary}" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Classes="outline" Content="重新打开教务窗口" Padding="10,5" FontSize="12"
+                Click="OnReopenWindowClick" />
+        <Button Classes="primary" Content="返回课表" Padding="10,5" FontSize="12"
+                Click="OnCloseClick" />
+      </StackPanel>
+    </Grid>
+
+    <!-- 状态：抓取结果与错误原因（悬浮球文案只够一句话，这里给完整说明） -->
+    <Border Grid.Row="1" Margin="26,12,26,0" Padding="12,10" CornerRadius="4"
+            Background="{DynamicResource TodoAccentSoft}"
+            IsVisible="{Binding TimetableStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Text="{Binding TimetableStatus}" FontSize="12" TextWrapping="Wrap"
+                 Foreground="{DynamicResource TodoTextPrimary}" />
+    </Border>
+
+    <!-- 中间：操作指引 -->
+    <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14"
+                MaxWidth="520">
+      <TextBlock Classes="icon" Text="&#xF0AC;" FontSize="34"
+                 HorizontalAlignment="Center"
+                 Foreground="{DynamicResource TodoTextTertiary}" />
+      <TextBlock FontSize="13" TextWrapping="Wrap" TextAlignment="Center" LineHeight="21"
+                 Foreground="{DynamicResource TodoTextSecondary}"
+                 Text="在教务窗口里完成登录，点进「个人课表查询」，然后：&#x0a;① 点窗口右下角的「一键获取课表」；&#x0a;② 或回到这里点下面的「抓取当前页课表」。" />
+      <Button Classes="primary" Content="抓取当前页课表" Padding="16,9" FontSize="13"
+              HorizontalAlignment="Center"
+              Click="OnManualFetchClick"
+              ToolTip.Tip="读取教务窗口当前显示的页面并解析课表" />
+      <TextBlock FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                 Foreground="{DynamicResource TodoTextTertiary}"
+                 Text="本工具不代填账号、不代提交，只读取你已打开的那个页面。" />
+    </StackPanel>
+
+    <!-- 底部：窗口状态 -->
+    <TextBlock Grid.Row="3" Margin="26,0,26,16" FontSize="11"
+               Foreground="{DynamicResource TodoTextTertiary}"
+               Text="{Binding JwWindowStateText}" />
+  </Grid>
+</UserControl>

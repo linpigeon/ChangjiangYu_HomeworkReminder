@@ -54,18 +54,22 @@
           </StackPanel>
         </Border>
 
-        <!-- 登录态失效（保留已缓存的列表，引导去设置页重新登录） -->
+        <!-- 登录态失效（保留已缓存的列表，引导去设置页重新登录）。
+             用 Grid 的 * / Auto 两列而不是横向 StackPanel：**手机上「去登录」按钮会被挤出屏幕**
+             （实测 360dp 宽时按钮右边缘落在 367dp，被列表容器裁掉 7dp，只剩半个按钮）。
+             横向 StackPanel 不给子元素换行，超出部分直接画到视口外；
+             改成「文字占 * 列、按钮占 Auto 列」后文字先换行，按钮永远留在屏幕内。 -->
         <Border IsVisible="{Binding AuthWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                 Background="{DynamicResource TodoWarningBackground}"
                 BorderBrush="{DynamicResource TodoWarningBorder}" BorderThickness="1"
                 CornerRadius="4" Padding="10,8">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="{Binding AuthWarning}" FontSize="12" TextWrapping="Wrap"
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <TextBlock Grid.Column="0" Text="{Binding AuthWarning}" FontSize="12" TextWrapping="Wrap"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource TodoTextPrimary}" />
-            <Button Classes="outline" Content="去登录" Padding="8,3" FontSize="11"
+            <Button Grid.Column="1" Classes="outline" Content="去登录" Padding="8,3" FontSize="11"
                     VerticalAlignment="Center" Click="OnGoLoginClick" />
-          </StackPanel>
+          </Grid>
         </Border>
 
         <CheckBox Classes="todo" Content="隐藏已勾选" FontSize="11"

@@ -113,9 +113,14 @@ public sealed partial class MainViewModel : ViewModelBase
         [
             new NavItem("myday", "我的一天", "\uF185", "今天到期与已过期的事项"),
             new NavItem("planned", "计划内", "\uF133", "所有有截止时间的事项，按时间排序"),
-            new NavItem("homework", "作业", "\uF19D", "全部作业及其作答进度"),
+            // 图标：方框加一支笔（勾作业的意象）。**不能与「课程」同图标**——
+            // 两者原先都是 \uF19D（学士帽），侧栏上完全分不出来。
+            new NavItem("homework", "作业", "\uF044", "全部作业及其作答进度"),
             // 课程维度：学习通每门课的未完成任务点数（粒度到小节，不拆成逐条待办）。
             new NavItem("course", "课程", "\uF19D", "学习通各门课的未完成任务点汇总"),
+            // 课表：整页覆盖展示（网格需要宽度），内容来自教务系统导入。
+            // 图标用黑板：既与「计划内」的日历区分开，也贴合「上课」的意象。
+            new NavItem("timetable", "课表", "\uF51B", "周课表（可从教务系统一键导入）"),
             new NavItem("announcement", "公告", "\uF0A1", "课程公告，未读的排在前面"),
             new NavItem("completed", "已完成", "\uF058", "雨课堂判定已完成的作业"),
             new NavItem("all", "全部", "\uF03A", "作业与公告的全部内容"),
@@ -125,6 +130,13 @@ public sealed partial class MainViewModel : ViewModelBase
 
         // CanShowCourseDetail 是跨对象合成属性，必须转发 List 上的变化才会重求值。
         List.PropertyChanged += OnListPropertyChanged;
+
+        // 课表周次变化时重算网格（数据在 MainViewModel 手里，Timetable 只负责摆放）。
+        Timetable.RebuildRequested = RebuildTimetable;
+
+        // 节次时间表编辑器：保存通道接到这里（编辑器只管校验与编辑，落盘与刷新归 ViewModel）。
+        PeriodsEditor.SaveRequested = SavePeriodsAsync;
+        PeriodsEditor.Load(_scheduleFile.Periods);
         SyncStatus = "尚未同步";
 
         // 外观：主题、壁纸与背景透明度（持久化在 settings.json）。
@@ -141,7 +153,26 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             SyncStatus = $"系统通知不可用：{Notifier.UnavailableReason}";
         }
+
+        // 上课提醒：轮询课表，在「上课前 N 分钟」发通知。
+        // 读的是本地课表（不依赖登录态），所以只要设了学期基准、导入过课表就能工作。
+        ClassReminder = new ClassReminderService(
+            () => _scheduleFile,
+            () => CurrentTermStartDate,
+            () => AppSettings.Current.ClassReminderMinutes,
+            Notifier);
+        if (ClassReminderEnabled) _ = ClassReminder.StartAsync();
     }
+
+    /// <summary>
+    /// 上课提醒是否具备工作条件：提前量大于 0、且设了学期第一周。
+    /// <para>
+    /// 课表只有周次，没有学期基准就算不出「今天第几节是几点」，也就无从提醒。
+    /// </para>
+    /// </summary>
+    private bool ClassReminderEnabled =>
+        AppSettings.Current.ClassReminderMinutes > 0
+        && !string.IsNullOrWhiteSpace(CurrentTermStartDate);
 
     /// <summary>
     /// 自动同步用的同步入口：在后台线程上被 <see cref="AutoSyncService"/> 的循环调用。
@@ -314,6 +345,91 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private int _themeModeIndex = 2;
 
+    // ---------------- 课表（教务系统导入） ----------------
+
+    private readonly IScheduleStore _scheduleStore = new ScheduleStore();
+    private readonly JwProfileStore _jwProfileStore = new JwProfileStore();
+
+    /// <summary>课表文件（条目 + 节次时间表）。字段初始化不能引用实例成员，故此处先留空，
+    /// 由 <see cref="InitializeAsync"/> 读盘时填入（读不到时 store 会给出默认值）。</summary>
+    private ScheduleFile _scheduleFile = new() { Items = [], Periods = [] };
+
+    /// <summary>教务系统配置（只存网址）。</summary>
+    private JwProfile _jwProfile = new();
+
+    /// <summary>课表周视图的状态。</summary>
+    public TimetableViewModels Timetable { get; } = new();
+
+    /// <summary>是否显示课表页（与设置页同款：整页覆盖，不是弹窗）。</summary>
+    [ObservableProperty]
+    private bool _timetableOpen;
+
+    /// <summary>
+    /// 待办区（列表 + 详情）是否可见。
+    /// <para>
+    /// **必须是合成条件**：设置页与课表页都是整页覆盖，任一打开时待办区都要让位。
+    /// 只门控其中一个会漏——实测踩到过两次同类问题（先只判 <c>SettingsOpen</c>，
+    /// 加了课表页之后待办列表就透在课表下面）。这类「各判各的」只要新增一个覆盖页就会再犯，
+    /// 所以统一收在一个属性里表达。
+    /// </para>
+    /// </summary>
+    public bool ShowTodoPane => !SettingsOpen && !TimetableOpen && !JwImportOpen;
+
+    partial void OnTimetableOpenChanged(bool value) => OnPropertyChanged(nameof(ShowTodoPane));
+
+    partial void OnSettingsOpenChanged(bool value) => OnPropertyChanged(nameof(ShowTodoPane));
+
+    partial void OnJwImportOpenChanged(bool value) => OnPropertyChanged(nameof(ShowTodoPane));
+
+    /// <summary>课表页的状态/结果提示（导入结果、错误原因等）。</summary>
+    [ObservableProperty]
+    private string _timetableStatus = string.Empty;
+
+    /// <summary>教务系统登录页网址（设置页可编辑）。</summary>
+    [ObservableProperty]
+    private string _jwLoginUrlInput = string.Empty;
+
+    /// <summary>
+    /// 学期第一周的周一（设置页可编辑，<c>yyyy-MM-dd</c>）。
+    /// <para>改动立即落盘并重建课表网格——「周次 → 日期」的换算完全依赖它。</para>
+    /// </summary>
+    [ObservableProperty]
+    private string _termStartDateInput = AppSettings.Current.TermStartDate ?? string.Empty;
+
+    partial void OnTermStartDateInputChanged(string value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        // 允许清空；填了就必须是能解析的日期，否则不落盘——写坏基准会让整张课表的日期都错。
+        if (trimmed.Length > 0 && Services.Timetable.ParseDate(trimmed) is null) return;
+
+        var normalized = trimmed.Length > 0 ? trimmed : null;
+        if (AppSettings.Current.TermStartDate == normalized) return;
+
+        AppSettings.Current.TermStartDate = normalized;
+        AppSettings.Current.Save();
+        RebuildTimetable();
+
+        // 学期基准是上课提醒的前提：填上就该开始提醒，清掉就该停。
+        RaiseClassReminderHint();
+        if (ClassReminderEnabled) _ = ClassReminder.StartAsync();
+        else _ = ClassReminder.StopAsync();
+    }
+
+    /// <summary>是否已配置教务网址（决定「导入课表」能否直接打开窗口）。</summary>
+    public bool HasJwProfile => !string.IsNullOrWhiteSpace(_jwProfile.LoginUrl);
+
+    /// <summary>
+    /// 教务系统登录页地址的**权威值**（优先用户正在编辑的输入框，回落到已保存值）。
+    /// <para>
+    /// 两者可能不一致：设置页没打开过时输入框应等于已保存值（<see cref="InitializeAsync"/> 会赋值），
+    /// 但初始化异常、或用户清了输入框却没保存时就会分叉。导入窗口要的是「一个能用的地址」，
+    /// 所以这里取输入框的当前值、为空再回落到已保存值——否则会出现「窗口开了但一直空白、
+    /// 也没有任何提示」这种最难排查的状态。
+    /// </para>
+    /// </summary>
+    public string JwEffectiveLoginUrl =>
+        string.IsNullOrWhiteSpace(JwLoginUrlInput) ? _jwProfile.LoginUrl ?? string.Empty : JwLoginUrlInput.Trim();
+
     private static readonly Color PanelSidebarLight = Color.Parse("#F3F2F1");
     private static readonly Color PanelListLight = Color.Parse("#FAF9F8");
     private static readonly Color PanelSurfaceLight = Color.Parse("#FFFFFF");
@@ -468,6 +584,30 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private NavItem _selectedNav;
 
+    /// <summary>
+    /// 选中导航项变化时记下「上一个不是课表的项」。
+    /// <para>
+    /// <b>必须在变化的那一刻记，不能等 <see cref="OpenTimetable"/></b>：用户点「课表」时
+    /// <c>SelectedNav</c> 已经变成课表了，那时再取「上一个」只会拿到课表自己，
+    /// 于是关闭时无从恢复（实测栽在这里）。这个钩子在赋值瞬间触发，拿到的才是真正的来路。
+    /// </para>
+    /// </summary>
+    partial void OnSelectedNavChanged(NavItem value)
+    {
+        if (value?.Key != "timetable") _navBeforeTimetable = value;
+    }
+
+    /// <summary>
+    /// 打开课表前选中的导航项；关闭课表时回到它。
+    /// <para>
+    /// <b>为什么需要它</b>：侧边栏「课表」是导航项，<see cref="OpenTimetable"/> 是靠
+    /// <c>SelectedNav.Key == "timetable"</c> 触发的。关闭时只把 <c>TimetableOpen</c> 置回 false
+    /// 的话，<c>SelectedNav</c> 仍停在「课表」——列表于是显示一个空的课表筛选，
+    /// 看起来就像「按了返回却毫无反应」（实测在 Android 上就栽在这里）。
+    /// </para>
+    /// </summary>
+    private NavItem? _navBeforeTimetable;
+
     [ObservableProperty]
     private TodoItemViewModel? _selectedItem;
 
@@ -609,6 +749,7 @@ public sealed partial class MainViewModel : ViewModelBase
     {
         SettingsTabIndex = 1;
         SettingsOpen = true;
+        TimetableOpen = false;
         DrawerOpen = false;
     }
 
@@ -859,6 +1000,318 @@ public sealed partial class MainViewModel : ViewModelBase
         };
     }
 
+    /// <summary>打开课程表（按当前日期定位到本周）。</summary>
+    public void OpenTimetable()
+    {
+        SettingsOpen = false;
+        TimetableOpen = true;
+        GotoCurrentTimetableWeek();
+    }
+
+    /// <summary>
+    /// 关闭课表，回到打开它之前的那个列表。
+    /// <para>
+    /// 必须一并把 <c>SelectedNav</c> 从「课表」挪走：只关页面的话列表会停在一个空的课表筛选上，
+    /// 用户看到的是「按了返回/关闭却什么都没变」。
+    /// </para>
+    /// </summary>
+    public void CloseTimetable()
+    {
+        var restore = _navBeforeTimetable;
+        _navBeforeTimetable = null;
+
+        // 先切导航项再关页面。这里必须真的把 SelectedNav 从「课表」挪走：
+        // 下面的 OnNavChanged 看到 key == "timetable" 就会**重新把课表打开**，
+        // 于是「关闭」表现为毫无反应（实测栽在这里）。
+        if (restore is not null && !ReferenceEquals(restore, SelectedNav)) SelectedNav = restore;
+        else if (SelectedNav?.Key == "timetable")
+        {
+            // 没记录到来路（例如直接落在课表页）→ 退回第一个列表，别停在课表上。
+            SelectedNav = NavItems[0];
+        }
+
+        TimetableOpen = false;
+        TimetableStatus = string.Empty;
+        OnNavChanged();
+    }
+
+    /// <summary>周次加减（1 基，夹在 1..<see cref="Services.Timetable.MaxWeek"/>）。</summary>
+    public void ShiftTimetableWeek(int delta)
+    {
+        var next = Math.Clamp(Timetable.WeekNumber + delta, 1, Services.Timetable.MaxWeek);
+        if (next == Timetable.WeekNumber)
+        {
+            // 已经到头：仍重建一次，保证界面与数据一致（不依赖「值变化」这个副作用）。
+            RebuildTimetable();
+            return;
+        }
+        Timetable.WeekNumber = next;
+    }
+
+    /// <summary>跳到当前日期所在的周（未配置学期第一周时回到第 1 周）。</summary>
+    public void GotoCurrentTimetableWeek()
+    {
+        var week = Services.Timetable.ComputeWeekNumber(
+            DateTime.Now.ToString("yyyy-MM-dd"), CurrentTermStartDate);
+        var target = Math.Clamp(week ?? 1, 1, Services.Timetable.MaxWeek);
+
+        // 赋值触发重建只在「值真的变了」时才发生（OnWeekNumberChanged）。
+        // 首次打开课表时默认周次就是 1，若算出来也是 1 就不会触发，
+        // 表现是「课表页一片空白」——实测踩到。所以这里**显式重建**，不依赖副作用。
+        Timetable.WeekNumber = target;
+        RebuildTimetable();
+    }
+
+    /// <summary>
+    /// 按当前周次重建网格。
+    /// <para>
+    /// 未配置「学期第一周」时不编造日期，只按周次展示——见 <see cref="TimetableViewModels.Rebuild"/>。
+    /// </para>
+    /// </summary>
+    private void RebuildTimetable() => Timetable.Rebuild(
+        _scheduleFile.Items, Timetable.WeekNumber, CurrentTermStartDate, _scheduleFile.Periods, IsDark);
+
+    /// <summary>学期第一周周一（yyyy-MM-dd）；未配置返回 null。</summary>
+    private static string? CurrentTermStartDate =>
+        string.IsNullOrWhiteSpace(AppSettings.Current.TermStartDate) ? null : AppSettings.Current.TermStartDate;
+
+    /// <summary>课表条目数（导航角标用）。</summary>
+    public int ScheduleItemCount => _scheduleFile.Items.Count;
+
+    /// <summary>
+    /// 节次时间表编辑器（设置 → 课表）。
+    /// <para>
+    /// 时间表是周视图、待办、提醒三处时间的唯一来源，所以校验与落盘都放在
+    /// <see cref="SavePeriods"/> 里统一把关：**先校验、再落盘**，非法就抛出具体原因。
+    /// </para>
+    /// </summary>
+    public PeriodsEditorViewModel PeriodsEditor { get; } = new();
+
+    /// <summary>
+    /// 保存节次时间表（由编辑器在校验通过后调用）。
+    /// <para>
+    /// 会再校验一次：编辑器那条路径可能被绕过（以后的批量导入、脚本），
+    /// 而写坏时间表会让**整张课表的时间全错**，这道关不能只放在界面层。
+    /// </para>
+    /// </summary>
+    /// <returns>给用户看的结果文案。</returns>
+    private async Task<string> SavePeriodsAsync(IReadOnlyList<PeriodSlot> periods)
+    {
+        // 抛异常而不是返回 false：调用方需要拿到「到底哪里不合法」。
+        Services.Timetable.ValidatePeriods(periods);
+
+        _scheduleFile.Periods = periods
+            .Select(p => new PeriodSlot { Period = p.Period, StartTime = p.StartTime, EndTime = p.EndTime })
+            .ToList();
+
+        // 时间表变了，条目的起止时间要跟着重算，否则课块上还是旧时间。
+        foreach (var item in _scheduleFile.Items)
+        {
+            var time = Services.Timetable.ResolveSessionTime(item, _scheduleFile.Periods);
+            item.StartTime = time.StartTime;
+            item.EndTime = time.EndTime;
+        }
+
+        RebuildTimetable();
+
+        // 落盘失败要说清楚：内存里已经生效、下次启动会回退，这种不一致必须让用户知道。
+        // 这里正常 await（不 ConfigureAwait(false)）：续体要回到 UI 线程继续刷界面。
+        try
+        {
+            await _scheduleStore.SaveAsync(_scheduleFile).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"写入课表文件失败（改动只在本次运行内有效）：{ex.Message}", ex);
+        }
+
+        var enabled = periods.Count(p => !Services.Timetable.IsPeriodDisabled(p));
+        var disabled = periods.Count - enabled;
+        return disabled > 0
+            ? $"时间表已保存：{periods.Count} 节（{enabled} 节启用、{disabled} 节停用）。"
+            : $"时间表已保存：共 {periods.Count} 节。";
+    }
+
+    /// <summary>打开教务系统导入（网页抓取）。</summary>
+    public void OpenJwImport()
+    {
+        // 未配置学校网址时先引导去设置，而不是打开一个空白窗口。
+        if (!HasJwProfile)
+        {
+            TimetableStatus = "请先在 设置 → 账号 填写学校教务系统登录页网址，然后再导入。";
+            return;
+        }
+
+        JwImportOpen = true;
+        TimetableStatus = string.Empty;
+    }
+
+    /// <summary>教务导入页是否打开。</summary>
+    [ObservableProperty]
+    private bool _jwImportOpen;
+
+    /// <summary>关闭教务导入页。</summary>
+    public void CloseJwImport()
+    {
+        JwImportOpen = false;
+        JwDialogAccessor = null;
+    }
+
+    /// <summary>
+    /// 教务页弹窗的访问器（由 <see cref="Views.JwImportView"/> 在弹窗创建后注入）。
+    /// <para>
+    /// 用独立弹窗（<c>NativeWebDialog</c>）而不是内嵌控件：与「长江雨课堂登录」同款形态，
+    /// 弹窗浮在应用之上，不与应用内容挤在同一块区域——内嵌时实测会与待办列表重叠、
+    /// 原生面还会被外层容器裁切。
+    /// </para>
+    /// 抓取与悬浮球注入都通过它，ViewModel 不直接依赖视图。
+    /// </summary>
+    public static Func<Avalonia.Controls.NativeWebDialog?>? JwDialogAccessor { get; set; }
+
+    /// <summary>
+    /// 教务弹窗的页面就绪闸门（由 <see cref="Views.JwImportView"/> 在弹窗创建后注入）。
+    /// <para>
+    /// 存在的理由：WebView 在任何页面加载完成之前执行脚本必定失败
+    /// （<c>InvalidOperationException: Unable to invoke script before any page was loaded</c>），
+    /// 而「抓取当前页课表」按钮在弹窗刚打开时就能被点到。先问闸门一句，
+    /// 把「页面还没加载好」变成一句明确的提示，而不是一次注定失败的调用。
+    /// </para>
+    /// <para>
+    /// 与 <see cref="JwDialogAccessor"/> 同生命周期：由视图在创建/关闭弹窗时一并设置。
+    /// </para>
+    /// </summary>
+    public static PageReadyGate? JwPageGate { get; set; }
+
+
+    /// <summary>当前课表文件（教务抓取流程读取条目与节次表）。</summary>
+    public ScheduleFile CurrentSchedule => _scheduleFile;
+
+    /// <summary>
+    /// 直接用给定课表覆盖当前数据并重建网格（**不落盘**）。
+    /// <para>
+    /// 给桌面自检用：课表页要看的是「真实数据摆出来对不对」，
+    /// 而正常路径要求先登录教务系统把课表抓下来——那样就永远无法在无人值守环境里回归界面。
+    /// </para>
+    /// </summary>
+    public void LoadScheduleForCheck(ScheduleFile file)
+    {
+        Timetable.WeekNumber = Services.Timetable.ComputeWeekNumber(
+            DateTime.Now.ToString("yyyy-MM-dd"), CurrentTermStartDate) ?? 1;
+        SetScheduleFile(file);
+    }
+
+    /// <summary>
+    /// 课表的**唯一**写入口：换课表文件 + 刷新所有依赖它的派生状态。
+    /// <para>
+    /// 为什么必须收敛成一处：课表有三个写入点（启动读盘、教务导入、自检注入），
+    /// 各自漏刷一个通知就会出现「程序里明明有课表，设置里却说没有」这类自相矛盾的状态——
+    /// 实测踩过：启动读盘漏了 <see cref="RaiseClassReminderHint"/>，
+    /// 于是上课提醒一直显示「还没有课表」。
+    /// </para>
+    /// </summary>
+    private void SetScheduleFile(ScheduleFile file)
+    {
+        _scheduleFile = file;
+        OnPropertyChanged(nameof(ScheduleItemCount));
+        RebuildTimetable();
+        RaiseClassReminderHint();
+    }
+
+    /// <summary>当前学期标识（导入时写入条目）。</summary>
+    public int CurrentTerm => AppSettings.Current.Term;
+
+    /// <summary>
+    /// 导入成功后落盘并刷新周视图。
+    /// <para>由教务导入视图在抓取成功后调用：视图负责 WebView，ViewModel 负责数据与界面状态。</para>
+    /// </summary>
+    public async Task ApplyImportedScheduleAsync(ScheduleFile file, ScheduleMergeResult result)
+    {
+        SetScheduleFile(file);
+        try
+        {
+            await _scheduleStore.SaveAsync(_scheduleFile).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            TimetableStatus = $"课表已更新，但保存失败：{ex.Message}";
+        }
+
+        _jwProfile.LastFetchAt = DateTimeOffset.Now;
+        _jwProfile.LastFetchSummary = result.ToString();
+        try
+        {
+            await _jwProfileStore.SaveAsync(_jwProfile).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            // 抓取记录写不进去不影响课表本身。
+        }
+    }
+
+    /// <summary>设置课表页的状态提示（教务导入视图反馈结果用）。</summary>
+    public void SetTimetableStatus(string message) => TimetableStatus = message;
+
+    /// <summary>教务弹窗的状态文案（由视图维护）。</summary>
+    [ObservableProperty]
+    private string _jwWindowStateText = "正在打开教务系统窗口…";
+
+    /// <summary>
+    /// 手动抓取当前页课表。
+    /// <para>
+    /// 是悬浮球之外的**备用路径**：万一注入被页面结构挡住，用户仍有办法抓取。
+    /// </para>
+    /// </summary>
+    public async Task FetchJwScheduleNowAsync()
+    {
+        var dialog = JwDialogAccessor?.Invoke();
+        if (dialog is null)
+        {
+            TimetableStatus = "教务窗口未打开，请点「重新打开教务窗口」。";
+            return;
+        }
+
+        // 页面还没加载完成时执行脚本必定失败（WebView 的硬约束），先给出可操作的提示，
+        // 而不是让用户看到一次注定失败的抓取。服务层还有一道闸门兜着同一个条件。
+        var gate = JwPageGate;
+        if (gate is null || !gate.IsReady)
+        {
+            TimetableStatus = "教务页面还在加载中，请等页面显示出来后再抓取。";
+            return;
+        }
+
+        try
+        {
+            var result = await JwCaptureService.FetchAndImportAsync(
+                dialog,
+                gate,
+                () => CurrentSchedule,
+                (file, merge) => ApplyImportedScheduleAsync(file, merge),
+                CurrentTerm).ConfigureAwait(true);
+            TimetableStatus = result.Message;
+        }
+        catch (Exception ex)
+        {
+            TimetableStatus = $"抓取出错：{ex.Message}";
+        }
+    }
+
+    /// <summary>保存教务系统网址（设置页调用）。</summary>
+    public async Task SaveJwLoginUrlAsync()
+    {
+        var url = (JwLoginUrlInput ?? string.Empty).Trim();
+        if (url.Length > 0 && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            // 只允许 https：教务页要输账号口令，明文 http 不可接受。
+            TimetableStatus = "教务系统网址必须以 https:// 开头。";
+            return;
+        }
+
+        _jwProfile.LoginUrl = url;
+        await _jwProfileStore.SaveAsync(_jwProfile).ConfigureAwait(true);
+        OnPropertyChanged(nameof(HasJwProfile));
+        TimetableStatus = url.Length > 0 ? "教务系统网址已保存。" : "已清空教务系统网址。";
+    }
+
     // ---------------- 个人信息（设置页手动填写） ----------------
 
     [ObservableProperty]
@@ -1050,6 +1503,22 @@ public sealed partial class MainViewModel : ViewModelBase
             // SyncStatus 马上会被后台同步的进度文本覆盖，缓存提示单独放一条，
             // 在新数据到达前一直可见。
             CacheNote = $"列表是 {cachedFile.SyncedAt:MM-dd HH:mm} 的本地缓存，正在后台同步…";
+        }
+
+        // 课表：读一次即用（导入时才重写），失败按空课表处理。
+        try
+        {
+            var loaded = await _scheduleStore.LoadAsync().ConfigureAwait(true);
+            _jwProfile = await _jwProfileStore.LoadAsync().ConfigureAwait(true);
+            JwLoginUrlInput = _jwProfile.LoginUrl;
+            // 先按当前周建好网格：这样用户点「课表」时不会看到一瞬间的空白。
+            // 走统一的写入口——它会一并刷新上课提醒的前提提示
+            //（漏了这一步就会出现「明明有课表，却说还没有课表」）。
+            SetScheduleFile(loaded);
+        }
+        catch (Exception)
+        {
+            // 课表读不出来不该挡住其它功能（store 内部已做坏数据兜底，这里是最后一道）。
         }
 
         var saved = await _sessionStore.LoadAsync().ConfigureAwait(true);
@@ -1340,6 +1809,9 @@ public sealed partial class MainViewModel : ViewModelBase
     /// <summary>自动同步与「新作业」通知。</summary>
     public AutoSyncService AutoSync { get; }
 
+    /// <summary>上课提醒（「上课前 N 分钟」发系统通知）。</summary>
+    public ClassReminderService ClassReminder { get; }
+
     /// <summary>
     /// 同步后的全量事项，供桌面小组件复用。
     /// 小组件据此渲染，不再单独请求网络，从而与主界面始终一致。
@@ -1414,6 +1886,55 @@ public sealed partial class MainViewModel : ViewModelBase
             _ = AutoSync.StartAsync(minutes);
     }
 
+    /// <summary>
+    /// 上课前多少分钟提醒（0 = 不提醒）。改动即保存，并立刻按新值启停提醒轮询。
+    /// <para>NumericUpDown 已在界面限定范围，这里仍过一次归一化兜底（手改 settings.json 的路径）。</para>
+    /// </summary>
+    [ObservableProperty]
+    private int _classReminderMinutes = AppSettings.Current.ClassReminderMinutes;
+
+    partial void OnClassReminderMinutesChanged(int value)
+    {
+        var minutes = AppSettings.NormalizeClassReminderMinutes(value);
+        AppSettings.Current.ClassReminderMinutes = minutes;
+        SaveSettingsDebounced();
+
+        // 按新值启停：0 或「没设学期基准」都不跑，避免空转。
+        if (ClassReminderEnabled) _ = ClassReminder.StartAsync();
+        else _ = ClassReminder.StopAsync();
+    }
+
+    /// <summary>
+    /// 上课提醒为什么没生效（有原因才显示给用户）。
+    /// <para>
+    /// 光有「提前 N 分钟」的输入框不够——没设学期第一周时它一点用都没有，
+    /// 必须把原因说出来，否则用户只会觉得提醒坏了。
+    /// </para>
+    /// </summary>
+    public string? ClassReminderHint
+    {
+        get
+        {
+            if (AppSettings.Current.ClassReminderMinutes <= 0) return null;
+            if (string.IsNullOrWhiteSpace(CurrentTermStartDate))
+                return "上课提醒需要「学期第一周的周一」才能算出今天几点上课，请在上面的「学期」里填写。";
+            if (_scheduleFile.Items.Count == 0)
+                return "还没有课表，导入后上课提醒才会生效。";
+            if (!Notifier.IsAvailable)
+                return $"系统通知不可用：{Notifier.UnavailableReason}";
+            return null;
+        }
+    }
+
+    /// <summary>是否显示上课提醒的提示。</summary>
+    public bool HasClassReminderHint => ClassReminderHint is not null;
+
+    private void RaiseClassReminderHint()
+    {
+        OnPropertyChanged(nameof(ClassReminderHint));
+        OnPropertyChanged(nameof(HasClassReminderHint));
+    }
+
     /// <summary>学年起始年（学期代码 = 年 × 100 + 学期序号，如 202601 = 2026-2027 学年第一学期）。</summary>
     [ObservableProperty]
     private int _termYear = AppSettings.Current.Term / 100;
@@ -1472,28 +1993,38 @@ public sealed partial class MainViewModel : ViewModelBase
             await AutoSync.StartAsync(AppSettings.Current.AutoRefreshMinutes).ConfigureAwait(true);
     }
 
-    /// <summary>设置页的选项卡：0 = 设置，1 = 账号，2 = 关于。</summary>
+    /// <summary>设置页的选项卡：0 = 设置，1 = 账号，2 = 课表，3 = 关于。</summary>
     [ObservableProperty]
     private int _settingsTabIndex;
 
     public bool SettingsTab0Active => SettingsTabIndex == 0;
     public bool SettingsTab1Active => SettingsTabIndex == 1;
     public bool SettingsTab2Active => SettingsTabIndex == 2;
+    public bool SettingsTab3Active => SettingsTabIndex == 3;
 
     partial void OnSettingsTabIndexChanged(int value)
     {
         OnPropertyChanged(nameof(SettingsTab0Active));
         OnPropertyChanged(nameof(SettingsTab1Active));
         OnPropertyChanged(nameof(SettingsTab2Active));
+        OnPropertyChanged(nameof(SettingsTab3Active));
     }
 
-    /// <summary>切换设置页选项卡（0 = 设置，1 = 账号，2 = 关于）。</summary>
-    public void ShowSettingsTab(int index) => SettingsTabIndex = index;
+    /// <summary>切换设置页选项卡（0 = 设置，1 = 账号，2 = 课表，3 = 关于）。</summary>
+    public void ShowSettingsTab(int index)
+    {
+        SettingsTabIndex = index;
+
+        // 进课表选项卡时把编辑器刷成当前时间表：上次编辑没保存的残留不该带进来。
+        if (index == 2) PeriodsEditor.Load(_scheduleFile.Periods);
+    }
 
     /// <summary>打开设置页（侧边栏齿轮按钮）。</summary>
     public void OpenSettings()
     {
         SettingsOpen = true;
+        // 设置与课表都是整页覆盖，同时打开会互相遮挡。
+        TimetableOpen = false;
         DrawerOpen = false;
     }
 
@@ -2198,6 +2729,12 @@ public sealed partial class MainViewModel : ViewModelBase
     public void OnNavChanged()
     {
         SettingsOpen = false;
+
+        // 「课表」是整页覆盖（网格需要宽度），不是列表筛选：切到它时打开课表页，
+        // 切到别的导航项时自动关掉，避免它盖住待办列表。
+        if (SelectedNav?.Key == "timetable") OpenTimetable();
+        else TimetableOpen = false;
+
         // 两个详情面板的选中态都要清：它们各绑一个属性，
         // 只清一个会让「先选课程、再选待办」时两块详情叠加显示（实际踩过）。
         SelectedItem = null;

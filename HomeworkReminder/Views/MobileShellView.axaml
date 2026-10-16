@@ -6,18 +6,36 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="760"
-             x:Class="HomeworkReminder.Android.Views.MobileShellView"
+             x:Class="HomeworkReminder.Views.MobileShellView"
              x:DataType="vm:MainViewModel">
 
   <!--
     Android 外壳：抽屉式移动布局。
     列表全屏；☰ 展开覆盖式抽屉（遮罩 + 不透明面板）；点选事项进全屏详情二级页。
-    与桌面外壳（共享项目的 TodoShellView）共用同一 MainViewModel 与全部内容部件
+    与桌面外壳（TodoShellView）共用同一 MainViewModel 与全部内容部件
     （SidebarView / TodoListView / TodoDetailView），只在外壳组合方式上不同。
+
+    **为什么这个文件在共享项目而不是 Android 头**：
+    它原先在 HomeworkReminder.Android/Views 下，导致「渲染手机尺寸」的界面遮挡审计
+    （androidcheck，跑在桌面头）根本编译不到它——只能看共享项目里的其它视图，
+    而移动端特有的层叠顺序、返回栏、抽屉恰恰是最容易出遮挡的地方。
+    唯一挡路的是 NavigateExamWeb 里那一句 Android 的 CookieManager，
+    已抽成 IPlatformServices.PrepareExamWebSession（默认空实现）。
+    现在两端编译的是同一份外壳代码，审计的就是线上跑的那个。
   -->
   <Grid>
     <!-- 全屏待办列表（DrawerMode=true：头部按钮切抽屉） -->
     <views:TodoListView DrawerMode="True" />
+
+    <!--
+      课表页：全屏覆盖（与设置页同款）。
+      课表是整页覆盖而不是列表筛选——7 天 × 节次的网格需要宽度，挤在列表栏里读不清；
+      手机上靠横向滑动看周末那两列。
+      自带表头（含返回/导入按钮），所以这里不再叠一层返回栏。
+      **不加这一段，Android 端点侧栏「课表」会什么都没发生**——抽屉里能点，
+      但移动外壳从来没把 TimetableView 放进可视树（实测踩到）。
+    -->
+    <views:TimetableView IsVisible="{Binding TimetableOpen}" />
 
     <!-- 详情二级页：选中事项后全屏覆盖，左上角返回。
          背景必须不透明：SurfaceBrush 为壁纸效果带透明度，浮层会透出列表。 -->
