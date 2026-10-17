@@ -7,6 +7,36 @@
 >
 > 历史版本：v1.2.0（基线，双端）→ v1.1.0（桌面）→ v1.0.0（桌面）。
 
+## v1.4.1（2026-10-16）· 修复裁剪分发包系统通知不可用
+
+**这是一个只有分发包才有的缺陷**：从源码构建（`bin\Debug` / `bin\Release`）一切正常，
+只有用户拿到的裁剪单文件包会坏——所以自测时看不出来，必须实测发布产物。
+
+### 修复
+
+- **裁剪包系统通知不可用**：设置页提示
+  「系统通知不可用：通知初始化失败：NotSupportedException:
+  Built-in COM has been disabled via a feature switch」。
+  上课提醒与新作业通知在分发包里**全部失效**。
+  - 根因一：`tools/publish.ps1` 的 trim 模式只传 `-p:PublishTrimmed=true`，
+    而裁剪**默认关掉内置 COM 互操作**；`ShellLink` 要用
+    `Activator.CreateInstance(Type.GetTypeFromCLSID(...))` 与 `[ComImport]` 接口
+    写开始菜单快捷方式的 `System.AppUserModel.ID`（未打包应用发 toast 的前提），
+    于是构造通知器时直接抛异常
+  - 根因二：只补 `-p:BuiltInComInteropSupport=true` 还不够——COM 路径会真的走进去，
+    但 `[ComImport]` 接口元数据已被裁掉，`IPropertyStore.Commit()` 处 `0xC0000005` 访问冲突。
+    最终用 `TrimmerRootAssembly` 把桌面头整体排除在裁剪之外，保住这些接口
+  - 代价：42.4 MB → 42.64 MB（+0.24 MB）；框架与可裁剪包照旧被裁
+
+### 验证
+
+- `publish\trim` 产物实测：`--toastcheck` 报「通知可用性 : 可用」、WinRT 投递成功；
+  `tools\test-toast.ps1` 确认 toast 进入通知中心（PASS，exit 0）
+- 同一产物的 `--jsoncheck` 45 项全过、`--ttcheck` 课表正常渲染，确认裁剪未伤及其它功能
+
+> v1.4.0 的分发包带着此缺陷，且客户端的更新检查**只比较版本号**，
+> 因此无法靠就地覆盖 1.4.0 的资产来通知已下载的用户——故以 v1.4.1 重新发布。
+
 ## v1.4.0（2026-10-16）· 教务系统课表导入与周视图
 
 新增**课表**功能：从学校教务系统（正方系）一键抓取课表，以周视图网格展示。

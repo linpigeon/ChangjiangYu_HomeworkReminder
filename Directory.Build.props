@@ -16,6 +16,6 @@
     改版本号时只改这一处；发布脚本会校验它与 tag 是否一致。
   -->
   <PropertyGroup>
-    <Version>1.4.0</Version>
+    <Version>1.4.1</Version>
   </PropertyGroup>
 </Project>
