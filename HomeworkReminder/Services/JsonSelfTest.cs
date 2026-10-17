@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Linq;
@@ -1980,6 +1981,52 @@ public static class JsonSelfTest
                 AppSettings.Current.TermStartDate = previousTermStart;
                 MainViewModel.Notifier = previousNotifier;
             }
+        });
+
+        Check("更新检查：超时与取消必须分开报（不要把 .NET 英文原文甩给用户）", () =>
+        {
+            // 回归：用户截图里看到的是
+            // 「检查更新失败：The request was canceled due to the configured
+            //   HttpClient.Timeout of 15 seconds elapsing.」
+            // 成因是 TaskCanceledException 派生自 OperationCanceledException，
+            // 而旧代码用 catch (OperationCanceledException) { throw; } 想让「用户取消」透传，
+            // 结果把「超时」也一起抛到了界面上。
+            Assert(typeof(OperationCanceledException).IsAssignableFrom(typeof(TaskCanceledException)),
+                "TaskCanceledException 应派生自 OperationCanceledException"
+                + "（这正是「只按异常类型分不出超时与取消」的根源，别用类型判断）");
+
+            // ① 超时必须翻成人话，且不留 .NET 原文
+            var timeout = UpdateService.DescribeFailure(new TaskCanceledException(
+                "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing."));
+            Assert(!timeout.Contains("HttpClient", StringComparison.Ordinal)
+                   && !timeout.Contains("canceled", StringComparison.OrdinalIgnoreCase),
+                $"不该把 HttpClient 原文给用户看，实际「{timeout}」");
+            Assert(timeout.Contains("超时", StringComparison.Ordinal), $"超时要明说，实际「{timeout}」");
+
+            // ② 我们自己显式抛的超时带秒数，要原样保留（用户才知道是「慢」还是「不通」）
+            var explicitTimeout = UpdateService.DescribeFailure(
+                new TimeoutException("请求超时（30 秒内没有响应）"));
+            Assert(explicitTimeout.Contains("30 秒", StringComparison.Ordinal),
+                $"显式超应保留秒数，实际「{explicitTimeout}」");
+
+            // ③ 真取消仍然说「已取消」，④ 网络错误要能区分
+            Assert(UpdateService.DescribeFailure(new OperationCanceledException()) == "已取消",
+                "用户主动取消应报「已取消」");
+            Assert(UpdateService.DescribeFailure(new HttpRequestException("Connection refused"))
+                       .Contains("网络不可达", StringComparison.Ordinal),
+                "网络错误应报「网络不可达」");
+        });
+
+        Check("全部已读：远程失败不该拖垮本地已读", () =>
+        {
+            // 公告的已读判据是「本地 ReadAnnouncements ∪ 学习日志 hasRead」（见 SyncService），
+            // 与通知中心的 user_read_all 接口无关；后者只是顺手替用户清雨课堂的通知中心。
+            // 旧代码「远程失败即整体失败」，于是用户点了没反应、只看到一句无从下手的报错。
+            var vm = new MainViewModel();
+            var r = vm.MarkAllReadAsync().GetAwaiter().GetResult();
+            Assert(!r.LocalApplied, "未登录时本地已读无法落地");
+            Assert(r.RemoteFailureReason == "未登录", $"未登录必须给出确切原因，实际「{r.RemoteFailureReason}」");
+            Assert(!r.RemoteSynced && !r.AuthExpired, "未登录既没同步成功，也不是「登录态失效」");
         });
 
         Check("课表：合并导入（增/改/跳过，不删既有）", () =>

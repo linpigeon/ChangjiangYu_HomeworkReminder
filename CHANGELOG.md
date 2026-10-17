@@ -7,6 +7,51 @@
 >
 > 历史版本：v1.2.0（基线，双端）→ v1.1.0（桌面）→ v1.0.0（桌面）。
 
+## 未发布 · 修复「检查更新超时」与「标记已读失败」
+
+两个都是用户实际撞到的缺陷，且**都只在真实网络 / 真实账号下才暴露**。
+
+### 修复
+
+- **检查更新必定失败（国内网络）**：界面显示
+  「检查更新失败：The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.」
+  - 根因一（**主因**）：`ResolveManifestAsync` 在查询 release 后会去下载
+    `update-manifest.json`，而那个地址在 **github.com** 上（不是 api.github.com）。
+    实测该主机在国内经常连不通：`api.github.com` 200 / 0.6 秒，
+    而 `github.com/…/releases/download/…` 21 秒后仍 `HTTP 000`。
+  - 根因二：超时（`TaskCanceledException`）与用户取消都派生自
+    `OperationCanceledException`，而代码里 `catch (OperationCanceledException) { throw; }`
+    本意是「让用户取消透传」，结果把超时也一起抛了出去；清单下载的注释本来写着
+    「失败不视为查询失败」，实际却把整次检查打成了失败。最后 `ex.Message`
+    把 .NET 的英文原文直接送上了界面。
+  - 修法：超时与取消**改用 `ct.IsCancellationRequested` 区分**（光看异常类型分不出来）；
+    清单只在「确实是新版本」时才去取（已是最新时它毫无用处，白等一个超时）；
+    各来源的失败各自收敛，不再互相拖垮；界面统一走 `UpdateService.DescribeFailure`
+    翻成人话。
+  - 顺带修：原先 `HttpClient.Timeout = 15 秒` 是**一刀切**，连「下载 17 MB 更新包」
+    也受它约束，慢网下正当下载会被拦腰掐断。现在连接阶段限 30 秒、
+    传输阶段给 10 分钟总预算（仍可被用户取消）。
+- **「全部已读」点了没反应**：「雨课堂没有接受这次「全部已读」请求。
+  可能是登录态已失效，或该接口有变动。」
+  - 根因：公告的已读判据是「本地 `ReadAnnouncements` ∪ 学习日志 `hasRead`」，
+    与通知中心的 `user_read_all` 接口**无关**；后者只是顺手把雨课堂的通知中心也清掉，
+    而且它的响应格式**从未被验证过**（见 `docs/ykt-api.md`）。
+    但代码把「远程失败」当成整体失败直接 `return false`，本地一点没动；
+    失败原因又在传输层被 `catch (YktApiException) { return false; }` 吞掉，
+    界面只能笼统地说「可能接口有变动」——用户既没法处理，也没法反馈。
+  - 修法：**先落地本地、再尽力同步远程**；远程失败只影响「雨课堂那边是否也变已读」，
+    并用状态栏留下接口原话。登录态失效单独识别，提示去重新登录而不是重试。
+    > 注：`YktAuthExpiredException` 派生自 `YktApiException`，原先 403 也会被当成
+    > 「接口有变动」，把「该重新登录」误报成「功能坏了」。
+
+### 验证
+
+- `--jsoncheck` 48 项全过（新增 2 项：超时/取消的区分与文案、全部已读的本地优先语义）
+- 真实网络复现 → 修复（同一命令、同一网络）：
+  - 修复前的已发布 v1.4.1：`检查更新失败：…HttpClient.Timeout of 15 seconds…`（16.6 秒）
+  - 修复后：`已是最新版本（v1.4.1；远端最新 v1.4.1，来自 GitHub）`（0.9 秒）
+- Android 窄屏遮挡审计 52 屏 0 违规、课表离屏渲染正常
+
 ## v1.4.1（2026-10-16）· 修复裁剪分发包系统通知不可用
 
 **这是一个只有分发包才有的缺陷**：从源码构建（`bin\Debug` / `bin\Release`）一切正常，

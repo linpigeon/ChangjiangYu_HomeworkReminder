@@ -2212,7 +2212,7 @@ public sealed partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             UpdateDownloadProgress = string.Empty;
-            UpdateStatus = $"更新失败：{ex.Message}";
+            UpdateStatus = $"更新失败：{UpdateService.DescribeFailure(ex)}";
             _downloaded = null;
             return false;
         }
@@ -2320,7 +2320,9 @@ public sealed partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            UpdateStatus = $"检查更新失败：{ex.Message}";
+            // 走统一的翻译：绝不把 .NET 的英文原文抛到界面上（用户截图里那句
+            // "The request was canceled due to the configured HttpClient.Timeout..." 就是它）。
+            UpdateStatus = $"检查更新失败：{UpdateService.DescribeFailure(ex)}";
         }
         finally
         {
@@ -2865,38 +2867,60 @@ public sealed partial class MainViewModel : ViewModelBase
         return null;
     }
 
+    /// <summary>「全部标记为已读」的结果。</summary>
+    /// <param name="LocalApplied">本应用的已读状态是否已落地。</param>
+    /// <param name="RemoteSynced">雨课堂服务端是否也接受了这次反写。</param>
+    /// <param name="RemoteFailureReason">未接受时的具体原因（原样来自接口层）。</param>
+    /// <param name="AuthExpired">原因是否为登录态失效（要重新登录，不是重试）。</param>
+    public sealed record MarkAllReadResult(
+        bool LocalApplied, bool RemoteSynced, string? RemoteFailureReason, bool AuthExpired);
+
     /// <summary>
-    /// 把公告全部标记为已读。实测雨课堂只有「全部已读」这一个反写接口，
-    /// 单条已读只存在于前端状态里。
+    /// 把公告全部标记为已读。
+    /// <para>
+    /// 顺序很重要：**先落地本应用、再尽力同步雨课堂**。公告的已读判据是
+    /// 「本地 <c>ReadAnnouncements</c> ∪ 学习日志 <c>hasRead</c>」（见 SyncService），
+    /// 与通知中心的 <c>user_read_all</c> 接口无关；后者只是顺手替用户把雨课堂的
+    /// 通知中心也清掉，而且它的响应格式从未被验证过（docs/ykt-api.md）。
+    /// 因此远程成败不该决定用户能不能清掉自己的未读——原先却是「远程失败就整体失败」，
+    /// 结果用户点了没反应，只看到一句无从下手的报错。
+    /// </para>
     /// </summary>
-    public async Task<bool> MarkAllReadAsync()
+    public async Task<MarkAllReadResult> MarkAllReadAsync(CancellationToken ct = default)
     {
-        if (_api is null) return false;
+        if (_api is null)
+            return new MarkAllReadResult(false, false, "未登录", false);
+
+        // ① 本地先落地。
+        foreach (var a in _lastResult?.Announcements ?? [])
+            _localState.ReadAnnouncements.Add(a.Id);
+
+        await _localStateStore.SaveAsync(_localState).ConfigureAwait(true);
+
+        foreach (var i in _cache.Where(i => i.Kind == TodoKind.Announcement))
+            i.IsDone = true;
+
+        List.Rebuild();
+        ShowUnreadBadge = false;
+        OnPropertyChanged(nameof(ListSubtitle));
+
+        // ② 再尽力同步到雨课堂；失败只影响「雨课堂那边是否也变已读」。
         try
         {
-            var ok = await _api.MarkAllReadAsync().ConfigureAwait(true);
-            if (!ok) return false;
-
-            foreach (var a in _lastResult?.Announcements ?? [])
-            {
-                _localState.ReadAnnouncements.Add(a.Id);
-            }
-
-            await _localStateStore.SaveAsync(_localState).ConfigureAwait(true);
-
-            foreach (var i in _cache.Where(i => i.Kind == TodoKind.Announcement))
-            {
-                i.IsDone = true;
-            }
-
-            List.Rebuild();
-            ShowUnreadBadge = false;
-            OnPropertyChanged(nameof(ListSubtitle));
-            return true;
+            var ok = await _api.MarkAllReadAsync(ct).ConfigureAwait(true);
+            return new MarkAllReadResult(true, ok, ok ? null : "接口未返回成功", false);
         }
-        catch (YktApiException)
+        catch (YktAuthExpiredException ex)
         {
-            return false;
+            return new MarkAllReadResult(true, false, ex.Message, true);
+        }
+        catch (YktApiException ex)
+        {
+            return new MarkAllReadResult(true, false, ex.Message, false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new MarkAllReadResult(true, false, $"{ex.GetType().Name}: {ex.Message}", false);
         }
     }
 

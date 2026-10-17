@@ -92,11 +92,80 @@ public static class UpdateService
     // GitHub API 要求带 User-Agent，否则 403。
     private static readonly HttpClient Http = CreateClient();
 
+    /// <summary>查询 release 列表的超时。GitHub 从国内访问经常要十几秒，15 秒太紧。</summary>
+    private static readonly TimeSpan MetadataTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// 取更新清单的超时。清单只是几行 JSON，慢到这个程度基本就是被墙/断网了；
+    /// 它本来就是可选资产，超时按「没有清单」处理即可，绝不能拖垮整次检查。
+    /// </summary>
+    private static readonly TimeSpan ManifestTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>下载更新包时，只对「连上并拿到响应头」限时。</summary>
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// 传输阶段的总预算。给慢网留足余地（约 30 KB/s 也能传完 17 MB），
+    /// 同时保证不会无限挂着——下载期间界面的「取消」是禁用的。
+    /// </summary>
+    private static readonly TimeSpan DownloadBudget = TimeSpan.FromMinutes(10);
+
     private static HttpClient CreateClient()
     {
-        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        // 刻意**不设** HttpClient.Timeout：它是一刀切的整请求上限，同一个值既要卡
+        // 「查一个小 JSON」，又要卡「下载十几 MB 更新包」——前者 30 秒足够，后者在慢网速下
+        // 30 秒根本下不完。实测 15 秒时，慢网下的更新包下载会被中途掐断。
+        // 现在改成：元数据查询用显式 CancellationToken 超时（见 GetStringAsync），
+        // 下载只限连接阶段，流式读取交给调用方的 ct。
+        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("HomeworkReminder/" + CurrentVersion);
         return http;
+    }
+
+    /// <summary>
+    /// 把异常翻译成**给用户看**的说明。
+    /// <para>
+    /// 为什么不直接 <c>ex.Message</c>：HttpClient 的超时原文是
+    /// <c>The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.</c>
+    /// ——纯英文、提到用户根本没配过的「HttpClient.Timeout」，用户既看不懂，
+    /// 也无法据此判断该重试、该换网络还是该等一等。实测用户截图里出现的就是这一句。
+    /// </para>
+    /// </summary>
+    public static string DescribeFailure(Exception ex) => ex switch
+    {
+        // 顺序要紧：TaskCanceledException 是 OperationCanceledException 的子类，
+        // 更具体的必须排在前面。
+        TaskCanceledException => "请求超时（网络较慢，或更新源当前不可达）",
+        OperationCanceledException => "已取消",
+        TimeoutException => ex.Message,
+        HttpRequestException => $"网络不可达：{ex.Message}",
+        _ => ex.Message,
+    };
+
+    /// <summary>
+    /// 带**显式超时**的 GET，并把「超时」与「用户取消」分开报告。
+    /// <para>
+    /// 为什么要分开：两者抛出的都是 <see cref="OperationCanceledException"/> 的子类
+    /// （超时是 <see cref="TaskCanceledException"/>），<b>只看异常类型分不出来</b>。
+    /// 原先用 <c>catch (OperationCanceledException) { throw; }</c> 想「让用户取消透传」，
+    /// 结果把超时也一起透传了出去，最终界面上出现的是 .NET 的原文：
+    /// 「The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.」
+    /// 唯一可靠的判据是**调用方自己的令牌有没有被取消**。
+    /// </para>
+    /// </summary>
+    private static async Task<string> GetStringAsync(string url, TimeSpan timeout, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeout);
+        try
+        {
+            return await Http.GetStringAsync(url, cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // 调用方没取消 → 是我们自己的 CancelAfter 到点，即超时。
+            throw new TimeoutException($"请求超时（{timeout.TotalSeconds:0} 秒内没有响应）");
+        }
     }
 
     /// <summary>
@@ -154,8 +223,10 @@ public static class UpdateService
         {
             await Task.WhenAll(tasks).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // 只有**调用方真的取消**才透传；超时已在 QuerySourceAsync 内转成
+            // TimeoutException 并收敛进 SourceResult，不会走到这里。
             throw;
         }
         catch (Exception)
@@ -181,6 +252,12 @@ public static class UpdateService
     private static async Task ResolveManifestAsync(ReleaseInfo? release, CancellationToken ct)
     {
         if (release is null) return;
+
+        // 只有「确实比本机新」才值得去取清单：已是最新时清单毫无用处（挑了包也用不上），
+        // 而它的下载地址在 github.com 上、国内经常连不通——白等一个超时。
+        // 实测「已是最新」被拖慢了约 20 秒，正是这么来的。
+        if (release.TagName is not { } tag || !IsNewer(tag)) return;
+
         var asset = release.Assets?.FirstOrDefault(a =>
             string.Equals(a.Name, ManifestAssetName, StringComparison.OrdinalIgnoreCase));
         if (asset?.BrowserDownloadUrl is not { Length: > 0 } url) return;
@@ -189,12 +266,19 @@ public static class UpdateService
         {
             // 清单只是几行 JSON；设上限避免异常响应把小文件变成大下载。
             if (asset.Size > 64 * 1024) return;
-            release.ManifestJson = await Http.GetStringAsync(url, ct).ConfigureAwait(false);
+            release.ManifestJson = await GetStringAsync(url, ManifestTimeout, ct).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception)
         {
             // 拿不到清单不影响更新可用性，静默降级。
+            // 注意这里**必须**连超时一起吞掉：清单是可选资产，它的超时曾经
+            // （因为 TaskCanceledException 也是 OperationCanceledException）
+            // 被当成取消透传出去，把整次「检查更新」打成失败——
+            // 而它的注释本来就写着「取回失败不视为查询失败」。
         }
     }
 
@@ -203,7 +287,7 @@ public static class UpdateService
     {
         try
         {
-            var json = await Http.GetStringAsync(apiUrl, ct).ConfigureAwait(false);
+            var json = await GetStringAsync(apiUrl, MetadataTimeout, ct).ConfigureAwait(false);
             var releases = JsonSerializer.Deserialize(json, AppJsonContext.Default.ListReleaseInfo);
             if (releases is null || releases.Count == 0)
                 return new SourceResult(name, null, "没有任何 release");
@@ -243,12 +327,11 @@ public static class UpdateService
 
             return new SourceResult(name, release, null);
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            return new SourceResult(name, null, ex is HttpRequestException or TaskCanceledException
-                ? "网络不可达"
-                : ex.Message);
+            // 超时（TimeoutException）与网络不可达分开说，用户才知道是「慢」还是「不通」。
+            return new SourceResult(name, null, DescribeFailure(ex));
         }
     }
 
@@ -367,25 +450,56 @@ public static class UpdateService
 
         try
         {
-            using (var resp = await Http
-                       .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
-                       .ConfigureAwait(false))
+            // 两个阶段两种上限，不能一刀切：
+            //   ① 连接阶段（拿到响应头）：ConnectTimeout。连不上就该尽快报错；
+            //   ② 传输阶段：DownloadBudget 的总预算。给够慢网下传十几 MB 的余地，
+            //      但也**不能完全不设**——界面在下载期间禁用「取消」，真卡死会永远挂着。
+            // 原先用的是 HttpClient.Timeout = 15 秒一刀切：慢网下正经下载会被拦腰掐断。
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(ConnectTimeout);
+
+            HttpResponseMessage resp;
+            try
+            {
+                resp = await Http
+                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException(
+                    $"下载更新包超时：{ConnectTimeout.TotalSeconds:0} 秒内没有建立连接。请稍后重试或手动下载。");
+            }
+
+            cts.CancelAfter(DownloadBudget);   // 换成传输阶段的总预算
+
+            using (resp)
             {
                 resp.EnsureSuccessStatusCode();
                 var total = resp.Content.Headers.ContentLength ?? choice.Asset.Size;
 
-                await using var src = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                await using var dst = new FileStream(
-                    partPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-
-                var buffer = new byte[81920];
-                long received = 0;
-                int read;
-                while ((read = await src.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                // 传输阶段的读取用 cts（用户取消 + 总预算），不是裸 ct。
+                try
                 {
-                    await dst.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                    received += read;
-                    progress?.Report(new DownloadProgress(received, total));
+                    await using var src = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+                    await using var dst = new FileStream(
+                        partPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+
+                    var buffer = new byte[81920];
+                    long received = 0;
+                    int read;
+                    while ((read = await src.ReadAsync(buffer, cts.Token).ConfigureAwait(false)) > 0)
+                    {
+                        await dst.WriteAsync(buffer.AsMemory(0, read), cts.Token).ConfigureAwait(false);
+                        received += read;
+                        progress?.Report(new DownloadProgress(received, total));
+                    }
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"下载更新包超时：超过 {DownloadBudget.TotalMinutes:0} 分钟仍未传完。"
+                        + "已丢弃未完成的文件，请稍后重试或手动下载。");
                 }
             }
 

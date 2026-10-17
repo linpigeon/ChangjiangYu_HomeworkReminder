@@ -50,12 +50,31 @@ public partial class TodoListView : UserControl
                     "雨课堂只提供「全部已读」接口，没有单条已读。这会把通知中心里所有未读一次清空。继续吗？"))
                 return;
 
-            var ok = await vm.MarkAllReadAsync();
-            if (!ok && TopLevel.GetTopLevel(this) is Window w2)
+            var result = await vm.MarkAllReadAsync();
+            if (TopLevel.GetTopLevel(this) is not Window w2) return;
+
+            if (!result.LocalApplied)
             {
                 await MessageBox.ShowAsync(w2, "标记已读失败",
-                    "雨课堂没有接受这次「全部已读」请求。可能是登录态已失效，或该接口有变动。");
+                    $"本应用的已读状态都没能更新：{result.RemoteFailureReason ?? "未知原因"}");
+                return;
             }
+
+            if (result.RemoteSynced) return;   // 两边都成功：不打扰用户
+
+            if (result.AuthExpired)
+            {
+                // 登录态失效是「要重新登录」，不是「接口坏了」——必须说清楚，
+                // 否则用户只会反复点、反复失败。
+                await MessageBox.ShowAsync(w2, "已标记，但雨课堂未同步",
+                    $"本应用内已标记为已读。但雨课堂登录态已失效（{result.RemoteFailureReason}），"
+                    + "那边的通知中心没有清掉。到「设置 → 账号」重新登录后可再试一次。");
+                return;
+            }
+
+            // 本地已生效、只有远程没接受：用状态栏告知即可，不弹窗打断。
+            // 这条信息对排查很重要——把接口的原话留下，别只写「可能接口有变动」。
+            vm.SyncStatus = $"已在本地标记为已读；雨课堂未接受同步：{result.RemoteFailureReason}";
         }
         catch (Exception ex)
         {

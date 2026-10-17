@@ -55,6 +55,11 @@ public interface IYktApi : IDisposable
     /// <summary>
     /// 全部标记为已读。这是雨课堂唯一可反写的已读接口——实测前端对单条消息只改本地
     /// Vue 状态（<c>this.$set(t,"is_read",!0)</c>），并没有单条已读的服务端调用。
+    /// <para>
+    /// 失败时**抛异常**（<see cref="YktAuthExpiredException"/> 表示要重新登录），
+    /// 而不是返回 false——这个端点的响应格式从未被验证过，失败原因是唯一线索，
+    /// 必须原样交给调用方展示。
+    /// </para>
     /// </summary>
     Task<bool> MarkAllReadAsync(CancellationToken ct = default);
 }
@@ -192,22 +197,26 @@ public sealed class YktApiClient : IYktApi, IDisposable
         return ReadInt(data, "total_unread") ?? 0;
     }
 
-    public async Task<bool> MarkAllReadAsync(CancellationToken ct = default)    {
+    /// <summary>
+    /// 全部标记为已读。返回 true 表示雨课堂接受了请求。
+    /// <para>
+    /// <b>失败会抛异常而不是返回 false</b>：这个端点的响应格式从未被真正验证过
+    /// （见 docs/ykt-api.md「POST 的具体响应未验证」），所以失败原因是排查的唯一线索，
+    /// 必须原样透出给调用方展示，不能在传输层就吞掉——
+    /// 原先 <c>catch (YktApiException) { return false; }</c> 让界面只能笼统地说
+    /// 「可能登录态失效，或接口有变动」，既误导用户也让问题无从定位。
+    /// </para>
+    /// </summary>
+    public async Task<bool> MarkAllReadAsync(CancellationToken ct = default)
+    {
         var url = "/smart_education/notification/message_assistant/user_read_all/" +
                   $"?term=latest&uv_id={Session.UniversityId}";
-        try
-        {
-            await PostDataAsync(
-                url,
-                new YktMarkAllReadRequest { UniversityId = Session.UniversityId },
-                AppJsonContext.Default.YktMarkAllReadRequest,
-                ct).ConfigureAwait(false);
-            return true;
-        }
-        catch (YktApiException)
-        {
-            return false;
-        }
+        await PostDataAsync(
+            url,
+            new YktMarkAllReadRequest { UniversityId = Session.UniversityId },
+            AppJsonContext.Default.YktMarkAllReadRequest,
+            ct).ConfigureAwait(false);
+        return true;
     }
 
     public async Task<YktUserProfile?> GetUserProfileAsync(CancellationToken ct = default)
