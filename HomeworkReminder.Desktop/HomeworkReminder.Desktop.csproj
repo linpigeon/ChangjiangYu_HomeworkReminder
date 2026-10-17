@@ -26,6 +26,30 @@
     <PackageReference Include="Avalonia.Controls.WebView" />
   </ItemGroup>
 
+  <!--
+    裁剪保留：System 通知依赖 [ComImport] 接口互操作（ShellLink 写 AUMID 快捷方式）。
+    裁剪会丢掉这些接口的元数据，后果**只在分发包里出现**（非裁剪构建正常）：
+      ① 不开 BuiltInComInteropSupport（裁剪默认）→ 构造 WindowsNotifier 抛
+         NotSupportedException: Built-in COM has been disabled via a feature switch，
+         界面提示「系统通知不可用」；
+      ② 开了它但接口被裁 → IPropertyStore.Commit() 处 0xC0000005 访问冲突。
+    实测 v1.4.0 裁剪包两者都撞上了。
+
+    做法上踩过两次坑，记下来免得重蹈：
+      · 先用 ILLink.Descriptors.xml + TrimmerRootDescriptor：清单格式是对的，
+        但 ILLink 直接 IL1012 内部崩溃（Fatal error in IL Linker），这条路走不通。
+      · 最终用 TrimmerRootAssembly 把桌面头整体排除在裁剪之外。桌面头本就不大，
+        换来确定性；框架与可裁剪包照旧被裁，「部分裁剪」的设计不受影响。
+    必须同时有 -p:BuiltInComInteropSupport=true（在 tools/publish.ps1 的 trim 模式里），
+    否则连内置 COM 都被关掉。
+    验证：publish\trim\HomeworkReminder.Desktop.exe 加 －－toastcheck 参数运行，
+          应打印「通知可用性 : 可用」（与内存中的非裁剪构建一致）。
+          （此处刻意用全角连字符：XML 注释里不允许出现连续两个半角连字符。）
+  -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="HomeworkReminder.Desktop" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\HomeworkReminder\HomeworkReminder.csproj" />
   </ItemGroup>

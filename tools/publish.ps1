@@ -109,7 +109,16 @@ switch ($Mode) {
             # 部分裁剪：只裁框架与可裁剪包，业务程序集保留（反射式 JSON 依赖它，
             # 配套开关在 csproj 的 JsonSerializerIsReflectionEnabledByDefault）。
             # 注：NativeAOT 需要 ILCompiler 包与 MSVC 工具链，本离线环境做不了。
-            '-p:PublishTrimmed=true'
+            '-p:PublishTrimmed=true',
+            # **裁剪会默认关掉内置 COM 互操作，必须显式打开**。
+            # 系统通知（toast）全程走手写 vtable 互操作（RoGetActivationFactory +
+            # Marshal.GetDelegateForFunctionPointer），依赖内置 COM 支持；
+            # 关掉后 WindowsNotifier 构造时抛
+            # NotSupportedException: Built-in COM has been disabled via a feature switch，
+            # 界面直接提示「系统通知不可用」，而**非裁剪构建完全正常**——
+            # 即只有分发包会坏、开发时看不出来（实测 v1.4.0 裁剪包踩到）。
+            # 参见 https://aka.ms/dotnet-illink/com
+            '-p:BuiltInComInteropSupport=true'
         )
     }
 }
