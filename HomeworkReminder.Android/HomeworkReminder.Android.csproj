@@ -8,7 +8,7 @@
     <ApplicationId>com.CompanyName.HomeworkReminder</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <!-- 与共享项目 HomeworkReminder.csproj 的 Version 保持一致。 -->
-    <ApplicationDisplayVersion>1.4.1</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>1.4.2</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
   </PropertyGroup>
